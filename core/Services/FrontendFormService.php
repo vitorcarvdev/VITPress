@@ -278,6 +278,8 @@ class FrontendFormService {
 			'stage_updated_at' => $created_at,
 			'stage_source' => 'vitpress_form',
 			'gclid'        => $tracking_data['gclid'] ?? '',
+			'gbraid'       => $tracking_data['gbraid'] ?? '',
+			'wbraid'       => $tracking_data['wbraid'] ?? '',
 			'fbclid'       => $tracking_data['fbclid'] ?? '',
 			'utm_source'   => $tracking_data['utm_source'] ?? '',
 			'utm_medium'   => $tracking_data['utm_medium'] ?? '',
