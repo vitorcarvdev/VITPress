@@ -31,6 +31,11 @@ $digits = static function ( $phone ) {
 		<p class="vp-brand">VitPress</p>
 		<h1>Pipeline de Leads</h1>
 		<p class="vp-status">Pipeline local</p>
+		<?php if ( ! empty( $marketing_line ) ) : ?>
+			<p class="vp-status<?php echo 'Marketing desconectado' === $marketing_line ? ' is-warn' : ''; ?>">
+				<?php echo 'Marketing conectado' === $marketing_line ? '● Marketing conectado' : '⚠ Marketing desconectado'; ?>
+			</p>
+		<?php endif; ?>
 	</header>
 
 	<div class="vp-install" id="vp-install" hidden>

@@ -152,6 +152,7 @@ class MobilePipeline {
 		$sw = home_url( '/pipeline/sw.js' );
 		$scope = home_url( '/pipeline/' );
 		$icon = self::asset_url( 'assets/icons/pipeline-icon-192.png' );
+		$marketing_line = \Hub\Core\Services\Integrations\VitAdsMarketing::mobile_line();
 
 		require HUB_PATH . 'modules/Pipeline/views/mobile-pipeline.php';
 		exit;

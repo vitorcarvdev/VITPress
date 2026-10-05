@@ -26,6 +26,7 @@ body {
 	padding: 18px 16px 14px;
 }
 .vp-brand, .vp-status { margin: 0; font-size: 13px; opacity: 0.85; }
+.vp-status.is-warn { color: #8a5a00; opacity: 1; }
 .vp-top h1 { margin: 2px 0 4px; font-size: 24px; }
 .vp-install {
 	display: flex;

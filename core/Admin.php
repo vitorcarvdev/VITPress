@@ -47,6 +47,7 @@ class Admin {
 		add_action( 'admin_post_hub_save_profile', array( $this, 'handle_save_profile' ) );
 		
 		add_filter( 'admin_footer_text', array( $this, 'render_admin_footer' ) );
+		add_action( 'admin_notices', array( '\Hub\Core\Services\Integrations\VitAdsMarketing', 'render_admin_notice' ) );
 
 		// Inicializa o serviço de Proteção de Plugins
 		$plugin_protection = new PluginProtectionService();
