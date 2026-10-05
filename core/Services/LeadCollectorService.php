@@ -142,10 +142,6 @@ class LeadCollectorService {
 			return;
 		}
 
-		if ( ! ( new \Hub\Core\Services\Licensing\LocalLicenseProvider() )->isValid() ) {
-			return;
-		}
-
 		$settings = self::get_settings();
 		if ( empty( $settings['enabled'] ) ) {
 			return;
@@ -208,10 +204,6 @@ class LeadCollectorService {
 	 * Renderiza o elemento raiz do Captador no rodapé.
 	 */
 	public function render_collector_container() {
-		if ( ! ( new \Hub\Core\Services\Licensing\LocalLicenseProvider() )->isValid() ) {
-			return;
-		}
-
 		$settings = self::get_settings();
 		if ( empty( $settings['enabled'] ) ) {
 			return;
@@ -229,17 +221,7 @@ class LeadCollectorService {
 		register_rest_route( 'hub/v1', '/collector/submit', array(
 			'methods'             => \WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'handle_rest_submission' ),
-			'permission_callback' => static function () {
-				if ( ( new \Hub\Core\Services\Licensing\LocalLicenseProvider() )->isValid() ) {
-					return true;
-				}
-
-				return new \WP_Error(
-					'vitpress_license_required',
-					'Este recurso requer uma licença VitPress ativa.',
-					array( 'status' => 403 )
-				);
-			},
+			'permission_callback' => '__return_true',
 		) );
 	}
 
