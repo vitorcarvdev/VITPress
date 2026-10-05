@@ -30,11 +30,11 @@
 
 			// Cores dos Estágios
 			var stageColors = {
-				'novo_interessado': '#2271b1',
-				'avaliacao': '#d97706',
-				'proposta_enviada': '#0284c7',
-				'cliente': '#16a34a',
-				'perdido': '#dc2626'
+				'presentation': '#64b5f6',
+				'negotiating': '#00a884',
+				'won': '#4caf50',
+				'lost': '#fbc02d',
+				'disqualified': '#f44336'
 			};
 
 			var stageColor = stageColors[card.stage] || '#64748b';

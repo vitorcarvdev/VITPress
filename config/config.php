@@ -51,6 +51,6 @@ return array(
 	),
 
 	// Configurações internas do sistema
-	'db_version'          => '1.0.3',
+	'db_version'          => '1.0.4',
 	'debug'               => false,
 );

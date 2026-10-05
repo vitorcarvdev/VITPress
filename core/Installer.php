@@ -76,6 +76,8 @@ class Installer {
 			pipeline_sync_status varchar(30) NOT NULL DEFAULT 'pending',
 			pipeline_sync_error text NULL,
 			pipeline_synced_at datetime NULL,
+			stage_updated_at datetime NULL,
+			stage_source varchar(30) NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
 			PRIMARY KEY  (id),
@@ -250,6 +252,14 @@ class Installer {
 		) {$charset_collate};";
 
 		dbDelta( $sql_leads );
+		$stage_at = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'stage_updated_at'" );
+		if ( empty( $stage_at ) ) {
+			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN stage_updated_at datetime NULL" );
+		}
+		$stage_source = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'stage_source'" );
+		if ( empty( $stage_source ) ) {
+			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN stage_source varchar(30) NULL" );
+		}
 		dbDelta( $sql_clients );
 		dbDelta( $sql_events );
 		dbDelta( $sql_settings );

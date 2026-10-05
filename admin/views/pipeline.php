@@ -14,34 +14,34 @@ $period_selected = isset( $_GET['period'] ) ? sanitize_key( $_GET['period'] ) : 
 $search_query    = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
 
 $column_configs = array(
-	'novo_interessado' => array(
-		'title'       => 'Novo Interessado',
-		'badge_color' => '#2271b1',
-		'border_top'  => '#2271b1',
+	'presentation' => array(
+		'title'       => 'Apresentação',
+		'badge_color' => '#64b5f6',
+		'border_top'  => '#64b5f6',
 		'bg_header'   => '#f0f6fc',
 	),
-	'avaliacao' => array(
-		'title'       => 'Avaliação',
-		'badge_color' => '#d97706',
-		'border_top'  => '#d97706',
-		'bg_header'   => '#fffbeb',
-	),
-	'proposta_enviada' => array(
-		'title'       => 'Proposta Enviada',
-		'badge_color' => '#0284c7',
-		'border_top'  => '#0284c7',
-		'bg_header'   => '#f0f9ff',
-	),
-	'cliente' => array(
-		'title'       => 'Cliente',
-		'badge_color' => '#16a34a',
-		'border_top'  => '#16a34a',
+	'negotiating' => array(
+		'title'       => 'Negociando',
+		'badge_color' => '#00a884',
+		'border_top'  => '#00a884',
 		'bg_header'   => '#f0fdf4',
 	),
-	'perdido' => array(
-		'title'       => 'Perdido',
-		'badge_color' => '#dc2626',
-		'border_top'  => '#dc2626',
+	'won' => array(
+		'title'       => 'Cliente Fechado',
+		'badge_color' => '#4caf50',
+		'border_top'  => '#4caf50',
+		'bg_header'   => '#f0fdf4',
+	),
+	'lost' => array(
+		'title'       => 'Cliente Perdido',
+		'badge_color' => '#fbc02d',
+		'border_top'  => '#fbc02d',
+		'bg_header'   => '#fffbeb',
+	),
+	'disqualified' => array(
+		'title'       => 'Ruim / Desqualificado',
+		'badge_color' => '#f44336',
+		'border_top'  => '#f44336',
 		'bg_header'   => '#fef2f2',
 	),
 );
@@ -107,7 +107,7 @@ $column_configs = array(
 							<?php echo count( $items ); ?>
 						</span>
 					</div>
-					<?php if ( 'novo_interessado' === $stage_slug && $waiting_attempts_count > 0 ) : ?>
+					<?php if ( 'presentation' === $stage_slug && $waiting_attempts_count > 0 ) : ?>
 						<div style="font-size: 11px; color: #d97706; margin-top: 4px; font-weight: 500;">
 							⏳ <?php echo esc_html( $waiting_attempts_count ); ?> aguardando 1º contato
 						</div>
@@ -172,13 +172,13 @@ $column_configs = array(
 								</div>
 
 								<!-- Informações Específicas de Estágio -->
-								<?php if ( 'perdido' === $stage_slug && ! empty( $card['lost_reason'] ) ) : ?>
+								<?php if ( 'lost' === $stage_slug && ! empty( $card['lost_reason'] ) ) : ?>
 									<div class="hub-lead-lost-note">
 										<strong>Motivo:</strong> <?php echo esc_html( $card['lost_reason'] ); ?>
 									</div>
 								<?php endif; ?>
 
-								<?php if ( 'cliente' === $stage_slug && $card['revenue_value'] > 0 ) : ?>
+								<?php if ( 'won' === $stage_slug && $card['revenue_value'] > 0 ) : ?>
 									<div class="hub-lead-sale-note">
 										💰 <strong>Venda:</strong> R$ <?php echo esc_html( number_format( $card['revenue_value'], 2, ',', '.' ) ); ?>
 									</div>

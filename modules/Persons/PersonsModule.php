@@ -2,6 +2,7 @@
 namespace Hub\Modules\Persons;
 
 use Hub\Modules\AbstractModule;
+use Hub\Modules\Pipeline\PipelineModule;
 use Hub\Core\Database;
 use Hub\Core\ProfileManager;
 use Hub\Admin\ListTables\PersonsListTable;
@@ -79,7 +80,7 @@ class PersonsModule extends AbstractModule {
 		$name    = isset( $_POST['name'] ) ? sanitize_text_field( $_POST['name'] ) : '';
 		$email   = isset( $_POST['email'] ) ? sanitize_email( $_POST['email'] ) : '';
 		$phone   = isset( $_POST['phone'] ) ? sanitize_text_field( $_POST['phone'] ) : '';
-		$stage   = isset( $_POST['stage'] ) ? sanitize_key( $_POST['stage'] ) : 'novo_contato';
+		$stage   = isset( $_POST['stage'] ) ? sanitize_key( $_POST['stage'] ) : 'presentation';
 		$status  = isset( $_POST['status'] ) ? sanitize_key( $_POST['status'] ) : 'novo';
 		$source  = isset( $_POST['source'] ) ? sanitize_text_field( $_POST['source'] ) : 'direto';
 		$notes   = isset( $_POST['notes'] ) ? sanitize_textarea_field( $_POST['notes'] ) : '';
@@ -167,6 +168,16 @@ class PersonsModule extends AbstractModule {
 			'revenue_value'=> $revenue_value,
 		);
 
+		$canonical_stage = PipelineModule::normalize_stage( $stage );
+		$data['stage']   = $canonical_stage;
+		$previous_stage  = '';
+		if ( $id > 0 ) {
+			$previous_stage = (string) Database::db()->get_var(
+				Database::db()->prepare( 'SELECT stage FROM ' . Database::table( 'leads' ) . ' WHERE id = %d', $id )
+			);
+			unset( $data['stage'] );
+		}
+
 		if ( $id > 0 ) {
 			// Não sobrescreve os dados de tracking iniciais ao editar
 			unset($data['first_touch_gclid'], $data['first_touch_fbclid'], $data['first_touch_utm_source'], $data['first_touch_utm_medium'], $data['first_touch_utm_campaign'], $data['first_touch_utm_content'], $data['first_touch_utm_term']);
@@ -180,8 +191,12 @@ class PersonsModule extends AbstractModule {
 			Database::log_history( 'lead', $id, 'create', 'Novo Lead cadastrado.' );
 		}
 
+		if ( $id > 0 && PipelineModule::normalize_stage( $previous_stage ) !== $canonical_stage ) {
+			PipelineModule::change_stage( $id, $canonical_stage, 'vitpress_admin', $previous_stage );
+		}
+
 		// Lógica de Upsert da Empresa (se os campos da empresa forem enviados e o lead for cliente)
-		if ( 'cliente' === $stage && isset( $_POST['company_name'] ) ) {
+		if ( 'won' === $canonical_stage && isset( $_POST['company_name'] ) ) {
 			$company_data = array(
 				'lead_id'       => $id,
 				'profile_type'  => $profile_type,
