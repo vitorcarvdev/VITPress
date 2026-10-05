@@ -124,19 +124,44 @@
 		});
 	});
 
+	var installDone = false;
+
+	function markInstalled() {
+		installDone = true;
+		deferredPrompt = null;
+		installText.textContent = 'Pipeline instalado no celular';
+		installBtn.hidden = true;
+		installBox.hidden = false;
+	}
+
 	window.addEventListener('beforeinstallprompt', function (event) {
 		event.preventDefault();
 		deferredPrompt = event;
 		installText.textContent = 'Adicionar à tela inicial';
+		installBtn.hidden = false;
 		installBox.hidden = false;
 	});
 
+	window.addEventListener('appinstalled', markInstalled);
+
 	installBtn.addEventListener('click', function () {
 		if (!deferredPrompt) return;
-		deferredPrompt.prompt();
-		deferredPrompt.userChoice.finally(function () {
-			deferredPrompt = null;
-			installBox.hidden = true;
+		var promptEvent = deferredPrompt;
+		deferredPrompt = null;
+		promptEvent.prompt();
+		promptEvent.userChoice.then(function (choice) {
+			var outcome = choice && choice.outcome ? choice.outcome : 'dismissed';
+			installBox.setAttribute('data-outcome', outcome);
+			if (outcome !== 'accepted') {
+				installBox.hidden = true;
+				return;
+			}
+			window.setTimeout(function () {
+				if (installDone) return;
+				installText.textContent = 'Se o ícone não aparecer, use o menu do Chrome > Adicionar à tela inicial.';
+				installBtn.hidden = true;
+				installBox.hidden = false;
+			}, 4000);
 		});
 	});
 

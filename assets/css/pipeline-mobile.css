@@ -85,6 +85,21 @@ body {
 .vp-card { padding: 14px; margin-bottom: 12px; }
 .vp-card h2, .vp-detail h2 { margin: 0 0 6px; font-size: 18px; }
 .vp-card p, .vp-detail p { margin: 0 0 4px; }
+#vp-detail-phone,
+#vp-detail-email {
+	display: block;
+	margin: 0 0 8px;
+	overflow-wrap: anywhere;
+}
+#vp-detail-wa-wrap {
+	display: block;
+	clear: both;
+	margin: 16px 0 0;
+}
+#vp-detail-wa {
+	display: inline-block;
+	position: static;
+}
 .vp-meta, .vp-alert { color: var(--vp-muted); font-size: 13px; }
 .vp-alert { color: #9a3412; }
 .vp-open, #vp-save { width: 100%; margin-top: 10px; }

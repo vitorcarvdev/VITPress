@@ -125,8 +125,7 @@ class MobilePipeline {
 		}
 
 		if ( ! is_user_logged_in() ) {
-			auth_redirect();
-			exit;
+			self::send_login_shell();
 		}
 		if ( ! current_user_can( 'manage_options' ) ) {
 			status_header( 403 );
@@ -148,9 +147,9 @@ class MobilePipeline {
 		$endpoint = rest_url( 'hub/v1/pipeline/stage' );
 		$css = self::asset_url( 'assets/css/pipeline-mobile.css' );
 		$js  = self::asset_url( 'assets/js/pipeline-mobile.js' );
-		$manifest = home_url( '/pipeline/manifest.webmanifest' );
-		$sw = home_url( '/pipeline/sw.js' );
-		$scope = home_url( '/pipeline/' );
+		$manifest = self::same_origin_path( home_url( '/pipeline/manifest.webmanifest' ) );
+		$sw = self::same_origin_path( home_url( '/pipeline/sw.js' ) );
+		$scope = self::pipeline_scope();
 		$icon = self::asset_url( 'assets/icons/pipeline-icon-192.png' );
 		$marketing_line = \Hub\Core\Services\Integrations\VitAdsMarketing::mobile_line();
 
@@ -172,29 +171,76 @@ class MobilePipeline {
 		return $cards;
 	}
 
+	private static function send_login_shell() {
+		$login = wp_login_url( home_url( '/pipeline/' ) );
+		status_header( 200 );
+		nocache_headers();
+		header( 'Content-Type: text/html; charset=utf-8' );
+		header( 'X-Robots-Tag: noindex, nofollow' );
+		echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">';
+		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+		echo '<link rel="manifest" href="' . esc_url( self::same_origin_path( home_url( '/pipeline/manifest.webmanifest' ) ) ) . '">';
+		echo '<title>Pipeline</title></head><body>';
+		echo '<p><a href="' . esc_url( $login ) . '">Entrar</a></p>';
+		echo '<script>location.replace(' . wp_json_encode( $login ) . ');</script>';
+		echo '</body></html>';
+		exit;
+	}
+
+	private static function pipeline_scope() {
+		$path = (string) wp_parse_url( home_url( '/pipeline/' ), PHP_URL_PATH );
+		if ( '' === $path ) {
+			$path = '/pipeline/';
+		}
+		return trailingslashit( $path );
+	}
+
+	private static function same_origin_path( $url ) {
+		$parts = wp_parse_url( (string) $url );
+		$path  = isset( $parts['path'] ) ? $parts['path'] : '/';
+		if ( ! empty( $parts['query'] ) ) {
+			$path .= '?' . $parts['query'];
+		}
+		return $path;
+	}
+
 	private static function send_manifest() {
-		$icon_192 = self::asset_url( 'assets/icons/pipeline-icon-192.png' );
-		$icon_512 = self::asset_url( 'assets/icons/pipeline-icon-512.png' );
+		$scope    = self::pipeline_scope();
+		$icon_192 = self::same_origin_path( HUB_URL . 'assets/icons/pipeline-icon-192.png' );
+		$icon_512 = self::same_origin_path( HUB_URL . 'assets/icons/pipeline-icon-512.png' );
 		$manifest = array(
+			'id'               => $scope,
 			'name'             => 'VitPress',
 			'short_name'       => 'Pipeline',
-			'start_url'        => home_url( '/pipeline/' ),
-			'scope'            => home_url( '/pipeline/' ),
+			'start_url'        => $scope,
+			'scope'            => $scope,
 			'display'          => 'standalone',
 			'background_color' => '#f4f7f6',
 			'theme_color'      => '#1b4d3e',
 			'icons'            => array(
 				array(
-					'src'   => $icon_192,
-					'sizes' => '192x192',
-					'type'  => 'image/png',
+					'src'     => $icon_192,
+					'sizes'   => '192x192',
+					'type'    => 'image/png',
 					'purpose' => 'any',
 				),
 				array(
-					'src'   => $icon_512,
-					'sizes' => '512x512',
-					'type'  => 'image/png',
+					'src'     => $icon_512,
+					'sizes'   => '512x512',
+					'type'    => 'image/png',
 					'purpose' => 'any',
+				),
+				array(
+					'src'     => $icon_192,
+					'sizes'   => '192x192',
+					'type'    => 'image/png',
+					'purpose' => 'maskable',
+				),
+				array(
+					'src'     => $icon_512,
+					'sizes'   => '512x512',
+					'type'    => 'image/png',
+					'purpose' => 'maskable',
 				),
 			),
 		);
@@ -208,12 +254,12 @@ class MobilePipeline {
 
 	private static function send_service_worker() {
 		$shell = array(
-			self::asset_url( 'assets/css/pipeline-mobile.css' ),
-			self::asset_url( 'assets/js/pipeline-mobile.js' ),
-			self::asset_url( 'assets/icons/pipeline-icon-192.png' ),
-			self::asset_url( 'assets/icons/pipeline-icon-512.png' ),
+			self::same_origin_path( self::asset_url( 'assets/css/pipeline-mobile.css' ) ),
+			self::same_origin_path( self::asset_url( 'assets/js/pipeline-mobile.js' ) ),
+			self::same_origin_path( HUB_URL . 'assets/icons/pipeline-icon-192.png' ),
+			self::same_origin_path( HUB_URL . 'assets/icons/pipeline-icon-512.png' ),
 		);
-		$cache = 'vitpress-pipeline-shell-v1';
+		$cache = 'vitpress-pipeline-shell-v2';
 		$body  = 'const CACHE=' . wp_json_encode( $cache ) . ';const SHELL=' . wp_json_encode( $shell ) . ';' . self::service_worker_runtime();
 
 		status_header( 200 );
@@ -228,8 +274,9 @@ class MobilePipeline {
 	private static function service_worker_runtime() {
 		return <<<'JS'
 self.addEventListener('install', function (event) {
-  event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.addAll(SHELL); }));
-  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE).then(function (cache) {
+    return cache.addAll(SHELL).catch(function () {});
+  }).then(function () { return self.skipWaiting(); }));
 });
 self.addEventListener('activate', function (event) {
   event.waitUntil(caches.keys().then(function (keys) {

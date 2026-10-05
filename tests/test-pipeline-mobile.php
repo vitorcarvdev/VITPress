@@ -98,22 +98,38 @@ $wpdb->delete( $wpdb->prefix . 'hub_leads', array( 'id' => $lead_id ), array( '%
 
 $base = home_url( '/pipeline/' );
 $headers = get_headers( $base, true );
-$location = '';
-if ( is_array( $headers ) ) {
-	foreach ( $headers as $key => $value ) {
-		if ( strtolower( (string) $key ) === 'location' ) {
-			$location = is_array( $value ) ? end( $value ) : $value;
-		}
-	}
-}
-check( is_string( $location ) && strpos( $location, 'pipeline' ) !== false && ( strpos( $location, 'wp-login.php' ) !== false || strpos( $location, 'vcsis' ) !== false ), 'pipeline sem sessão pede login e volta ao pipeline' );
+$status = is_array( $headers ) ? (string) ( $headers[0] ?? '' ) : '';
+$guest = (string) file_get_contents( $base );
+check( false !== strpos( $status, '200' ) && ( false !== strpos( $guest, 'wp-login.php' ) || false !== strpos( $guest, 'vcsis' ) ) && false !== strpos( $guest, 'pipeline' ) && false === strpos( $guest, 'vp-card' ), 'pipeline sem sessão pede login e volta ao pipeline' );
 
 $manifest = file_get_contents( home_url( '/pipeline/manifest.webmanifest' ) );
 $decoded = json_decode( (string) $manifest, true );
-check( is_array( $decoded ) && 'VitPress' === ( $decoded['name'] ?? '' ) && 'standalone' === ( $decoded['display'] ?? '' ) && false !== strpos( (string) ( $decoded['start_url'] ?? '' ), '/pipeline' ), 'manifest válido' );
+$start = (string) ( $decoded['start_url'] ?? '' );
+$scope = (string) ( $decoded['scope'] ?? '' );
+check( is_array( $decoded ) && 'VitPress' === ( $decoded['name'] ?? '' ) && 'Pipeline' === ( $decoded['short_name'] ?? '' ) && 'standalone' === ( $decoded['display'] ?? '' ) && '#1b4d3e' === ( $decoded['theme_color'] ?? '' ) && '#f4f7f6' === ( $decoded['background_color'] ?? '' ), 'manifest válido' );
+check( '/' === substr( $start, 0, 1 ) && false === strpos( $start, 'localhost' ) && false !== strpos( $start, '/pipeline/' ) && $scope === $start && false !== strpos( $scope, '/pipeline/' ), 'start_url e scope ficam em /pipeline/ sem host' );
+$origin = wp_parse_url( home_url( '/' ), PHP_URL_SCHEME ) . '://' . wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+$icon_ok = 0;
+foreach ( $decoded['icons'] ?? array() as $icon ) {
+	if ( ! in_array( $icon['sizes'] ?? '', array( '192x192', '512x512' ), true ) ) {
+		continue;
+	}
+	$icon_headers = get_headers( $origin . ( $icon['src'] ?? '' ), true );
+	$icon_status = is_array( $icon_headers ) ? (string) ( $icon_headers[0] ?? '' ) : '';
+	if ( false !== strpos( $icon_status, '200' ) ) {
+		$icon_ok++;
+	}
+}
+check( $icon_ok >= 2, 'ícones 192 e 512 respondem 200' );
 
 $sw = (string) file_get_contents( home_url( '/pipeline/sw.js' ) );
-check( strpos( $sw, 'pipeline-mobile.css' ) !== false && strpos( $sw, "request.mode === 'navigate'" ) !== false && strpos( $sw, '/wp-json/' ) !== false, 'service worker não guarda a página nem a API' );
+$sw_headers = get_headers( home_url( '/pipeline/sw.js' ), true );
+$sw_status = is_array( $sw_headers ) ? (string) ( $sw_headers[0] ?? '' ) : '';
+check( false !== strpos( $sw_status, '200' ) && strpos( $sw, 'pipeline-mobile.css' ) !== false && strpos( $sw, "request.mode === 'navigate'" ) !== false && strpos( $sw, '/wp-json/' ) !== false && false === strpos( $sw, 'localhost' ), 'service worker registra no escopo e não guarda a página nem a API' );
+$install_js = (string) file_get_contents( dirname( __DIR__ ) . '/assets/js/pipeline-mobile.js' );
+check( false !== strpos( $install_js, 'beforeinstallprompt' ) && false !== strpos( $install_js, 'userChoice' ) && false !== strpos( $install_js, 'appinstalled' ) && false !== strpos( $install_js, 'serviceWorker.register' ), 'instalação trata o prompt e o app instalado' );
+$mobile_css = (string) file_get_contents( dirname( __DIR__ ) . '/assets/css/pipeline-mobile.css' );
+check( false !== strpos( $mobile_css, '#vp-detail-wa-wrap' ) && false !== strpos( $mobile_css, 'margin: 16px 0 0' ) && false !== strpos( $mobile_css, '#vp-detail-email' ), 'botão WhatsApp fica separado do e-mail' );
 
 $admin = file_get_contents( dirname( __DIR__ ) . '/admin/views/pipeline.php' );
 check( strpos( $admin, 'Somente Visualização' ) !== false && strpos( $admin, 'hub-pipeline' ) !== false, 'kanban administrativo continua somente leitura' );
