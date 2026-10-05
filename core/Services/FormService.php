@@ -191,12 +191,17 @@ class FormService {
 			}
 		}
 
+		$created_at    = current_time( 'mysql' );
+		$initial_stage = array_key_first( \Hub\Modules\Pipeline\PipelineModule::get_stage_definitions() );
+
 		$data = array(
 			'profile_type' => $profile_type,
 			'name'         => $name,
 			'email'        => $email,
 			'phone'        => $phone,
-			'stage'        => 'novo_contato', // EstÃ¡gio inicial padrÃ£o
+			'stage'        => $initial_stage,
+			'stage_updated_at' => $created_at,
+			'stage_source' => 'vitpress_form',
 			'status'       => 'novo',
 			'source'       => 'site',
 			'gclid'        => $tracking_data['gclid'],

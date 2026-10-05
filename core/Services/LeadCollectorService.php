@@ -298,6 +298,8 @@ class LeadCollectorService {
 
 		// 5. Coleta dados de Atribuição do Tracker existente
 		$tracking_data = Tracker::get_current_tracking_data();
+		$created_at    = current_time( 'mysql' );
+		$initial_stage = array_key_first( \Hub\Modules\Pipeline\PipelineModule::get_stage_definitions() );
 
 		$custom_payload = array(
 			'captador_submission_uuid' => $submission_uuid,
@@ -310,7 +312,9 @@ class LeadCollectorService {
 			'email'        => $email,
 			'phone'        => $phone,
 			'source'       => 'captador_site',
-			'stage'        => 'novo_interessado',
+			'stage'        => $initial_stage,
+			'stage_updated_at' => $created_at,
+			'stage_source' => 'vitpress_attendant',
 			'notes'        => $notes,
 			'custom_data'  => wp_json_encode( $custom_payload, JSON_UNESCAPED_UNICODE ),
 			
@@ -354,8 +358,8 @@ class LeadCollectorService {
 			'browser'           => $tracking_data['browser'] ?? 'Desconhecido',
 			'os'                => $tracking_data['os'] ?? 'Desconhecido',
 			
-			'created_at'   => current_time( 'mysql' ),
-			'updated_at'   => current_time( 'mysql' ),
+			'created_at'   => $created_at,
+			'updated_at'   => $created_at,
 		);
 
 		global $wpdb;

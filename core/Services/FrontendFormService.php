@@ -266,13 +266,17 @@ class FrontendFormService {
 
 		// Coleta UTMs e IDs do Tracker
 		$tracking_data = Tracker::get_current_tracking_data();
+		$created_at    = current_time( 'mysql' );
+		$initial_stage = array_key_first( \Hub\Modules\Pipeline\PipelineModule::get_stage_definitions() );
 
 		$data = array(
 			'name'         => $name,
 			'email'        => $email,
 			'phone'        => $phone,
 			'source'       => 'site_form',
-			'stage'        => 'novo_interessado', // Estágio unificado
+			'stage'        => $initial_stage,
+			'stage_updated_at' => $created_at,
+			'stage_source' => 'vitpress_form',
 			'gclid'        => $tracking_data['gclid'] ?? '',
 			'fbclid'       => $tracking_data['fbclid'] ?? '',
 			'utm_source'   => $tracking_data['utm_source'] ?? '',
@@ -311,8 +315,8 @@ class FrontendFormService {
 			'browser'     => $tracking_data['browser'] ?? 'Desconhecido',
 			'os'          => $tracking_data['os'] ?? 'Desconhecido',
 			
-			'created_at'   => current_time( 'mysql' ),
-			'updated_at'   => current_time( 'mysql' ),
+			'created_at'   => $created_at,
+			'updated_at'   => $created_at,
 		);
 
 		global $wpdb;
