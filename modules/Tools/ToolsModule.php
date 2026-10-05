@@ -95,6 +95,9 @@ class ToolsModule extends AbstractModule {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Sem permissão.' );
 		}
+		if ( ! ( new \Hub\Core\Services\Licensing\LocalLicenseProvider() )->isValid() ) {
+			wp_die( 'Este recurso requer uma licença VitPress ativa.' );
+		}
 		check_admin_referer( 'hub_lead_collector_nonce', 'hub_nonce' );
 
 		$raw = isset( $_POST['collector'] ) ? (array) $_POST['collector'] : array();
