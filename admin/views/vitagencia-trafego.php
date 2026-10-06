@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</div>
 
 		<h2>Formulário de Captação</h2>
-		<p>Utilize o formulário oficial do VitPress para capturar leads e integrar automaticamente com o funil, Google Ads e Meta Ads.</p>
+		<p>Utilize o formulário oficial do VitPress para capturar leads. As conversões de mídia seguem pelo VitAds.</p>
 		
 		<div style="background: #f0f0f1; border: 1px solid #ccd0d4; padding: 15px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
 			<div>
@@ -94,98 +94,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 	</div>
 
 	<div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-		<h2>Google Ads — Conversão de Contato</h2>
-		<p>Rastreamento simplificado na página de obrigado para eventos de conversão de Contato.</p>
-		
-		<table class="form-table">
-			<tr>
-				<th scope="row"><label for="gads_contact_snippet">Snippet de evento de conversão — Contato</label></th>
-				<td>
-					<textarea name="integrations[google_ads_contact_snippet]" id="gads_contact_snippet" rows="6" class="large-text" placeholder="Cole o código gtag de conversão..."></textarea>
-					<?php if ( ! empty( $gads_contact['conversion_id'] ) && ! empty( $gads_contact['conversion_label'] ) ) : ?>
-						<div style="margin-top: 10px; padding: 10px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; color: #2e7d32;">
-							<strong>Conversão identificada:</strong> <?php echo esc_html( $gads_contact['conversion_id'] ); ?> &middot; 
-							<strong>Rótulo:</strong> <?php echo esc_html( $gads_contact['conversion_label'] ); ?>
-						</div>
-					<?php endif; ?>
-				</td>
-			</tr>
-		</table>
-	</div>
-
-	<div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-		<h2>Google Ads — Compras offline por CSV</h2>
-		
-		<table class="form-table">
-			<tr>
-				<th scope="row"><label for="gads_offline_name">Nome da conversão offline</label></th>
-				<td>
-					<input type="text" name="integrations[google_ads_offline][conversion_name]" id="gads_offline_name" class="regular-text" value="<?php echo esc_attr( $offline_name ); ?>">
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="gads_offline_currency">Moeda</label></th>
-				<td>
-					<input type="text" maxlength="3" name="integrations[google_ads_offline][currency]" id="gads_offline_currency" class="small-text" value="<?php echo esc_attr( $offline_currency ); ?>">
-				</td>
-			</tr>
-		</table>
-
-		<hr style="margin: 30px 0;">
-
-		<h2>Meta Ads - Conversions API</h2>
-		<p>Integração oficial server-side com a API de Conversões da Meta (Facebook/Instagram).</p>
-		
+		<h2>Conversões e Marketing</h2>
 		<?php
-			$meta_ads = isset( $settings['meta_ads'] ) ? $settings['meta_ads'] : array();
-			$meta_enabled = ! empty( $meta_ads['enabled'] );
-			$meta_pixel_id = $meta_ads['pixel_id'] ?? '';
-			$meta_access_token = $meta_ads['access_token'] ?? '';
-			$meta_debug = ! empty( $meta_ads['debug_mode'] );
-			$meta_test_code = $meta_ads['test_event_code'] ?? '';
+		$vitads_config = \Hub\Core\Services\Integrations\VitAdsEventService::config();
+		$vitads_on     = ! empty( $vitads_config['enabled'] ) && '' !== $vitads_config['token'] && '' !== $vitads_config['endpoint'];
+		$vitads_status = \Hub\Core\Services\Integrations\VitAdsMarketing::is_enabled()
+			? \Hub\Core\Services\Integrations\VitAdsMarketing::connection()
+			: array();
 		?>
-		<table class="form-table" role="presentation">
-			<tr>
-				<th scope="row">Integração Meta</th>
-				<td>
-					<label for="meta_enabled">
-						<input type="checkbox" name="meta_ads[enabled]" id="meta_enabled" value="1" <?php checked( $meta_enabled, true ); ?>>
-						Ativar Meta Pixel (Browser) e Conversions API (Servidor)
-					</label>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="meta_pixel_id">Pixel ID (Dataset)</label></th>
-				<td>
-					<input type="text" name="meta_ads[pixel_id]" id="meta_pixel_id" class="regular-text" value="<?php echo esc_attr( $meta_pixel_id ); ?>">
-					<p class="description"><strong>Onde encontrar:</strong> Meta Events Manager > Conjuntos de dados > [Nome do Pixel] > Configurações > Identificação do conjunto de dados.</p>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="meta_access_token">Access Token (CAPI)</label></th>
-				<td>
-					<input type="password" name="meta_ads[access_token]" id="meta_access_token" class="regular-text" value="<?php echo esc_attr( $meta_access_token ); ?>">
-					<p class="description">Token da API de Conversões do lado do servidor (mantido 100% invisível ao navegador).<br><strong>Onde encontrar:</strong> Meta Events Manager > Conjuntos de dados > [Nome do Pixel] > Configurações > API de Conversões > Gerar token de acesso.</p>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row">Modo de Teste</th>
-				<td>
-					<label for="meta_debug">
-						<input type="checkbox" name="meta_ads[debug_mode]" id="meta_debug" value="1" <?php checked( $meta_debug, true ); ?>>
-						Ativar Modo Debug
-					</label>
-					<p class="description">Se ativo, exibe logs avançados no Console do navegador e anexa o Test Event Code no CAPI.</p>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="meta_test_code">Test Event Code</label></th>
-				<td>
-					<input type="text" name="meta_ads[test_event_code]" id="meta_test_code" class="small-text" value="<?php echo esc_attr( $meta_test_code ); ?>">
-					<p class="description">Ex: TEST83214. Utilizado apenas quando o Modo Debug está habilitado.</p>
-				</td>
-			</tr>
-		</table>
+		<p style="margin: 0 0 8px;">
+			<?php if ( $vitads_on ) : ?>
+				<strong>● VitAds conectado</strong>
+			<?php else : ?>
+				<strong>⚠ VitAds desconectado</strong>
+			<?php endif; ?>
+		</p>
+		<p class="description">As conversões de Google Ads e Meta Ads são gerenciadas centralmente pelo VitAds.</p>
+		<?php if ( isset( $vitads_status['google_ads'] ) || isset( $vitads_status['meta_ads'] ) ) : ?>
+			<p class="description" style="margin-bottom: 0;">
+				Google Ads: <?php echo ! empty( $vitads_status['google_ads'] ) ? 'Configurado' : 'Não configurado'; ?>
+				· Meta Ads: <?php echo ! empty( $vitads_status['meta_ads'] ) ? 'Configurado' : 'Não configurado'; ?>
+			</p>
+		<?php endif; ?>
 	</div>
 
 	<p class="submit" style="max-width: 800px;">

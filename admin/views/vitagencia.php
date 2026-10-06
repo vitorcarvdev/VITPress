@@ -51,7 +51,6 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 		<a href="?page=hub-vitagencia&tab=seguranca" class="nav-tab <?php echo 'seguranca' === $active_tab ? 'nav-tab-active' : ''; ?>">Segurança do WP</a>
 		<a href="?page=hub-vitagencia&tab=trafego" class="nav-tab <?php echo 'trafego' === $active_tab ? 'nav-tab-active' : ''; ?>">Tráfego & Conversão</a>
 		<a href="?page=hub-vitagencia&tab=tracker" class="nav-tab <?php echo 'tracker' === $active_tab ? 'nav-tab-active' : ''; ?>">Tracker</a>
-		<a href="?page=hub-vitagencia&tab=google-ads-export" class="nav-tab <?php echo 'google-ads-export' === $active_tab ? 'nav-tab-active' : ''; ?>">Exportar Google Ads</a>
 	</h2>
 
 	<?php if ( isset( $_GET['message'] ) ) : ?>
@@ -87,11 +86,15 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 
 	<div class="hub-tab-content" style="margin-top: 20px;">
 		<?php
+		if ( 'google-ads-export' === $active_tab ) {
+			echo '<div class="notice notice-info"><p>A exportação CSV de compras offline foi desativada. As conversões de Google Ads e Meta Ads são gerenciadas centralmente pelo VitAds.</p></div>';
+		} else {
 		$tab_file = HUB_PATH . 'admin/views/vitagencia-' . $active_tab . '.php';
 		if ( file_exists( $tab_file ) ) {
 			require_once $tab_file;
 		} else {
 			echo '<div class="notice notice-error"><p>' . esc_html__( 'Aba não encontrada.', 'hub' ) . '</p></div>';
+		}
 		}
 		?>
 	</div>

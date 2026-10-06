@@ -2,6 +2,7 @@
 namespace Hub\Core\Services;
 
 use Hub\Core\Database;
+use Hub\Core\Services\Integrations\VitAdsEventService;
 use Hub\Core\Tracker;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -381,7 +382,8 @@ class LeadCollectorService {
 		// 7. Registra no histórico do CRM
 		Database::log_history( 'lead', $lead_id, 'created', 'Lead capturado automaticamente pelo Captador de Leads do site.' );
 
-		// 8. Dispara o evento comercial padrão do Hub (Meta CAPI & Google Ads)
+		VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $lead_data, $tracking_data ) );
+
 		do_action( 'hub/lead_created', $lead_id );
 
 		// 9. Disparo não-bloqueante de e-mail de notificação para a equipe
@@ -393,6 +395,43 @@ class LeadCollectorService {
 			'event_id' => 'LEAD-' . $lead_id,
 			'message'  => 'Informações recebidas com sucesso!',
 		), 200 );
+	}
+
+	/**
+	 * Contexto do FORM_SUBMIT já aceito pelo VitAdsEventService.
+	 *
+	 * @param array<string,mixed> $lead_data
+	 * @param array<string,mixed> $tracking_data
+	 * @return array<string,mixed>
+	 */
+	private function vitads_lead_context( \WP_REST_Request $request, array $lead_data, array $tracking_data ) {
+		$pick = static function ( $key ) use ( $tracking_data ) {
+			$current = isset( $tracking_data[ $key ] ) ? trim( (string) $tracking_data[ $key ] ) : '';
+			if ( '' !== $current ) {
+				return $current;
+			}
+			$first = isset( $tracking_data[ 'first_touch_' . $key ] ) ? trim( (string) $tracking_data[ 'first_touch_' . $key ] ) : '';
+			return $first;
+		};
+
+		$path = sanitize_text_field( wp_unslash( $request->get_param( 'conversion_page' ) ?? '' ) );
+
+		return array(
+			'name'             => $lead_data['name'] ?? '',
+			'email'            => $lead_data['email'] ?? '',
+			'phone'            => $lead_data['phone'] ?? '',
+			'event_source_url' => '' !== $path ? esc_url_raw( home_url( $path ) ) : home_url( '/' ),
+			'utm_source'       => $pick( 'utm_source' ),
+			'utm_medium'       => $pick( 'utm_medium' ),
+			'utm_campaign'     => $pick( 'utm_campaign' ),
+			'utm_content'      => $pick( 'utm_content' ),
+			'utm_term'         => $pick( 'utm_term' ),
+			'gclid'            => $pick( 'gclid' ),
+			'wbraid'           => $pick( 'wbraid' ),
+			'gbraid'           => $pick( 'gbraid' ),
+			'fbp'              => isset( $tracking_data['_fbp'] ) ? (string) $tracking_data['_fbp'] : '',
+			'fbc'              => isset( $tracking_data['_fbc'] ) ? (string) $tracking_data['_fbc'] : '',
+		);
 	}
 
 	/**

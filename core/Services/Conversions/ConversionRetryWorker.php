@@ -37,6 +37,7 @@ class ConversionRetryWorker {
 		}
 	}
 	private function retry_meta( $row, $now ) {
+		return;
 		$provider = new MetaConversionsProvider();
 		if ( ! $provider->is_configured() ) { return; }
 

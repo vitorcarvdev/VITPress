@@ -2,8 +2,8 @@
 /**
  * Template Name: VitPress - Obrigado Pelo Contato
  * 
- * Página limpa de confirmação, disparando a conversão Google Ads
- * e redirecionando para o WhatsApp.
+ * Página limpa de confirmação. A conversão segue pelo VitAds.
+ * Redireciona para o WhatsApp.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -25,11 +25,6 @@ if ( $token ) {
 		delete_transient( $transient_key );
 	}
 }
-
-// Resgata configuração do Google Ads
-$settings = get_option( 'hub_settings', array() );
-$gads     = isset( $settings['integrations']['google_ads_contact'] ) ? $settings['integrations']['google_ads_contact'] : false;
-$has_gads = $gads && ! empty( $gads['conversion_id'] ) && ! empty( $gads['conversion_label'] );
 
 ?>
 <!DOCTYPE html>
@@ -89,16 +84,6 @@ $has_gads = $gads && ! empty( $gads['conversion_id'] ) && ! empty( $gads['conver
 		}
 	</style>
 
-	<?php if ( $is_valid && $has_gads ) : ?>
-		<!-- Google Ads Global Tag -->
-		<script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo esc_attr( $gads['conversion_id'] ); ?>"></script>
-		<script>
-		  window.dataLayer = window.dataLayer || [];
-		  function gtag(){dataLayer.push(arguments);}
-		  gtag('js', new Date());
-		  gtag('config', '<?php echo esc_attr( $gads['conversion_id'] ); ?>');
-		</script>
-	<?php endif; ?>
 </head>
 <body>
 
@@ -109,15 +94,6 @@ $has_gads = $gads && ! empty( $gads['conversion_id'] ) && ! empty( $gads['conver
 			<p>Seu contato foi recebido com sucesso. Em instantes você será redirecionado para o nosso atendimento.</p>
 			<div class="hub-spinner"></div>
 			
-			<?php if ( $has_gads ) : ?>
-				<!-- Disparo do Evento de Conversão -->
-				<script>
-				  gtag('event', 'conversion', {
-					  'send_to': '<?php echo esc_js( $gads['conversion_id'] ); ?>/<?php echo esc_js( $gads['conversion_label'] ); ?>'
-				  });
-				</script>
-			<?php endif; ?>
-
 			<script>
 				setTimeout(function() {
 					window.location.href = "<?php echo esc_url_raw( $final_url ); ?>";
