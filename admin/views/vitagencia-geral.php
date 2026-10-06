@@ -209,3 +209,4 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</form>
 	</div>
 </div>
+<?php require HUB_PATH . 'admin/views/vitagencia-trafego.php'; ?>

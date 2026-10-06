@@ -6,7 +6,7 @@
 
 $root = dirname( __DIR__ );
 $read = static function ( $path ) use ( $root ) {
-	return (string) file_get_contents( $root . '/' . $path );
+	return str_replace( "\r\n", "\n", (string) file_get_contents( $root . '/' . $path ) );
 };
 
 $fail = 0;
@@ -53,6 +53,22 @@ $check( str_contains( $traffic, 'Conversões e Marketing' ) && str_contains( $tr
 $check( ! str_contains( $admin, 'Exportar Google Ads' ), 'aba de CSV saiu do menu' );
 $check( str_contains( $save, "isset( \$_POST['meta_ads'] )" ) && str_contains( $save, "isset( \$_POST['integrations']['google_ads_offline'] )" ) && ! str_contains( $save, 'unset( $settings[\'meta_ads\'] )' ), 'options antigas não são apagadas ao salvar a aba' );
 $check( str_contains( $license, 'LocalLicenseProvider' ) && str_contains( $license, 'isValid()' ), 'licença do Atendente permanece' );
+$tabs = $read( 'admin/views/vitagencia.php' );
+$geral = $read( 'admin/views/vitagencia-geral.php' );
+$tab_order = array( '>Marketing<', '>LGPD<', '>Backup<', '>E-mails<', '>Segurança do WP<', '>Diagnóstico<', '>Tracker<' );
+$cursor = 0;
+$order_ok = true;
+foreach ( $tab_order as $label ) {
+	$at = strpos( $tabs, $label );
+	if ( false === $at || $at < $cursor ) {
+		$order_ok = false;
+		break;
+	}
+	$cursor = $at;
+}
+$check( $order_ok && ! str_contains( $tabs, 'Licença & APIs' ) && ! str_contains( $tabs, 'Tráfego & Conversão' ), 'abas na ordem Marketing até Tracker' );
+$check( str_contains( $tabs, "'trafego' === \$active_tab" ) && str_contains( $geral, 'vitagencia-trafego.php' ), 'URL antiga de tráfego abre Marketing com o conteúdo anterior' );
+$check( str_contains( $geral, 'Status da Licença' ) && str_contains( $traffic, 'Formulário de Captação' ) && str_contains( $traffic, 'hub_save_vitagencia' ), 'licença e captação continuam nos mesmos formulários' );
 $check( ! str_contains( $events, 'graph.facebook.com' ) && ! str_contains( $events, 'googletagmanager' ), 'FORM_SUBMIT não chama Google nem Meta' );
 
 if ( $fail > 0 ) {
