@@ -138,6 +138,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div class="hub-card" style="margin-top: 20px;">
 		<h2>Integração com VitAds</h2>
 		<?php
+		$marketing_on = \Hub\Core\Services\Integrations\VitAdsMarketing::is_enabled();
+		$marketing    = $marketing_on ? \Hub\Core\Services\Integrations\VitAdsMarketing::connection() : array( 'state' => 'off' );
+		?>
+		<?php
 		$vitads          = isset( $settings['vitads'] ) && is_array( $settings['vitads'] ) ? $settings['vitads'] : array();
 		$vitads_enabled  = ! empty( $vitads['enabled'] );
 		$vitads_endpoint = ! empty( $vitads['endpoint'] ) ? $vitads['endpoint'] : 'https://vitads.vitagencia.com.br/api/v1/events';
@@ -149,6 +153,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<input type="hidden" name="action" value="hub_save_vitads">
 
 			<table class="form-table">
+				<tr>
+					<th scope="row">Marketing e Pipeline</th>
+					<td>
+						<label for="marketing_pipeline_enabled">
+							<input type="checkbox" name="marketing_pipeline_enabled" id="marketing_pipeline_enabled" value="1" <?php checked( $marketing_on ); ?>>
+							Ativar Marketing e Pipeline
+						</label>
+						<p class="description">Ative esta opção quando este site participar de campanhas de marketing e do acompanhamento comercial de leads.</p>
+						<?php if ( 'connected' === $marketing['state'] ) : ?>
+							<p>
+								<strong>● VitAds conectado</strong><br>
+								Cliente: <?php echo esc_html( $marketing['client_name'] ?: '—' ); ?><br>
+								Google Ads: <?php echo ! empty( $marketing['google_ads'] ) ? 'Configurado' : 'Não configurado'; ?><br>
+								Meta Ads: <?php echo ! empty( $marketing['meta_ads'] ) ? 'Configurado' : 'Não configurado'; ?>
+							</p>
+						<?php endif; ?>
+					</td>
+				</tr>
 				<tr>
 					<th scope="row">VitAds</th>
 					<td>
@@ -187,3 +209,4 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</form>
 	</div>
 </div>
+<?php require HUB_PATH . 'admin/views/vitagencia-trafego.php'; ?>

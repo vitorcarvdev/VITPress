@@ -73,6 +73,7 @@ class VitAgenciaModule extends AbstractModule {
 			'token'       => $token,
 			'routing_key' => $routing_key,
 		);
+		$settings['marketing_pipeline_enabled'] = ! empty( $_POST['marketing_pipeline_enabled'] );
 		update_option( 'hub_settings', $settings );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=hub-vitagencia&message=vitads_saved' ) );

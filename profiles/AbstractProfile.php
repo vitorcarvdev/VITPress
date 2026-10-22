@@ -54,13 +54,7 @@ abstract class AbstractProfile {
 	 * @return array Array de slugs e títulos dos estágios.
 	 */
 	public function get_pipeline_stages() {
-		return array(
-			'novo_interessado' => 'Novo Interessado',
-			'avaliacao'        => 'Avaliação',
-			'proposta_enviada' => 'Proposta Enviada',
-			'cliente'          => '✅ Cliente',
-			'perdido'          => '❌ Perdido',
-		);
+		return \Hub\Modules\Pipeline\PipelineModule::get_canonical_stages();
 	}
 
 	/**

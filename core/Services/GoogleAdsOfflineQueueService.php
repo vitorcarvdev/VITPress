@@ -23,6 +23,7 @@ class GoogleAdsOfflineQueueService {
 	 * @param int $lead_id O ID do Lead que acabou de se tornar Cliente.
 	 */
 	public function enqueue_offline_conversion( $lead_id ) {
+		return;
 		$lead_id = (int) $lead_id;
 		if ( ! $lead_id ) {
 			return;

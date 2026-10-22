@@ -266,14 +266,20 @@ class FrontendFormService {
 
 		// Coleta UTMs e IDs do Tracker
 		$tracking_data = Tracker::get_current_tracking_data();
+		$created_at    = current_time( 'mysql' );
+		$initial_stage = array_key_first( \Hub\Modules\Pipeline\PipelineModule::get_stage_definitions() );
 
 		$data = array(
 			'name'         => $name,
 			'email'        => $email,
 			'phone'        => $phone,
 			'source'       => 'site_form',
-			'stage'        => 'novo_interessado', // Estágio unificado
+			'stage'        => $initial_stage,
+			'stage_updated_at' => $created_at,
+			'stage_source' => 'vitpress_form',
 			'gclid'        => $tracking_data['gclid'] ?? '',
+			'gbraid'       => $tracking_data['gbraid'] ?? '',
+			'wbraid'       => $tracking_data['wbraid'] ?? '',
 			'fbclid'       => $tracking_data['fbclid'] ?? '',
 			'utm_source'   => $tracking_data['utm_source'] ?? '',
 			'utm_medium'   => $tracking_data['utm_medium'] ?? '',
@@ -311,8 +317,8 @@ class FrontendFormService {
 			'browser'     => $tracking_data['browser'] ?? 'Desconhecido',
 			'os'          => $tracking_data['os'] ?? 'Desconhecido',
 			
-			'created_at'   => current_time( 'mysql' ),
-			'updated_at'   => current_time( 'mysql' ),
+			'created_at'   => $created_at,
+			'updated_at'   => $created_at,
 		);
 
 		global $wpdb;
@@ -385,7 +391,7 @@ class FrontendFormService {
 			
 			$redirect_url = home_url( '/obrigado-contato?hub_token=' . $token );
 
-			VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data ) );
+			VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data, $data['ad_user_data_consent'] ) );
 
 			return new \WP_REST_Response( array( 
 				'success' => true, 
@@ -409,7 +415,7 @@ class FrontendFormService {
 	 * @param array<string,mixed> $tracking_data
 	 * @return array<string,mixed>
 	 */
-	private function vitads_lead_context( \WP_REST_Request $request, $name, $email, $phone, array $tracking_data ) {
+	private function vitads_lead_context( \WP_REST_Request $request, $name, $email, $phone, array $tracking_data, $consent = 'unknown' ) {
 		$pick = function ( $key ) use ( $tracking_data ) {
 			$current = isset( $tracking_data[ $key ] ) ? trim( (string) $tracking_data[ $key ] ) : '';
 			if ( '' !== $current ) {
@@ -434,6 +440,7 @@ class FrontendFormService {
 			'gbraid'           => $pick( 'gbraid' ),
 			'fbp'              => isset( $tracking_data['_fbp'] ) ? (string) $tracking_data['_fbp'] : '',
 			'fbc'              => isset( $tracking_data['_fbc'] ) ? (string) $tracking_data['_fbc'] : '',
+			'ad_user_data_consent' => $consent,
 		);
 	}
 

@@ -1,6 +1,7 @@
 <?php
 namespace Hub\Core;
 
+use Hub\Core\Services\Licensing\LocalLicenseProvider;
 use Hub\Core\Services\PluginProtectionService;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -46,6 +47,7 @@ class Admin {
 		add_action( 'admin_post_hub_save_profile', array( $this, 'handle_save_profile' ) );
 		
 		add_filter( 'admin_footer_text', array( $this, 'render_admin_footer' ) );
+		add_action( 'admin_notices', array( '\Hub\Core\Services\Integrations\VitAdsMarketing', 'render_admin_notice' ) );
 
 		// Inicializa o serviço de Proteção de Plugins
 		$plugin_protection = new PluginProtectionService();
@@ -139,9 +141,10 @@ class Admin {
 			);
 		}
 
-		// Submenu 3: Atendente Virtual (Captador de Leads)
+		// Submenu 3: Atendente Virtual (Captador de Leads). Sem licença o item some do menu,
+		// mas a página continua registrada para bloquear o acesso direto com a mensagem padrão.
 		add_submenu_page(
-			$main_slug,
+			( new LocalLicenseProvider() )->isValid() ? $main_slug : '',
 			'Atendente',
 			'Atendente',
 			'manage_options',
@@ -304,6 +307,10 @@ class Admin {
 	 * Renderiza a página dedicada de configurações do Atendente Virtual.
 	 */
 	public function render_atendente_page() {
+		if ( ! ( new LocalLicenseProvider() )->isValid() ) {
+			wp_die( 'Este recurso requer uma licença VitPress ativa.' );
+		}
+
 		require_once HUB_PATH . 'admin/views/atendente.php';
 	}
 }

@@ -392,6 +392,15 @@
 	}
 
 	// --- Envio Final para REST API ---
+	// A URL vai para o lead e o VitAds; identificadores de clique só seguem pelos cookies com consentimento.
+	function pageUrlWithoutClickIds() {
+		var url = window.location.origin + window.location.pathname;
+		var kept = window.location.search.replace(/^\?/, '').split('&').filter(function(pair) {
+			return pair !== '' && ['gclid', 'gbraid', 'wbraid', 'fbclid'].indexOf(pair.split('=')[0].toLowerCase()) === -1;
+		});
+		return url + (kept.length ? '?' + kept.join('&') : '');
+	}
+
 	function submitLead() {
 		var typing = document.createElement('div');
 		typing.className = 'hub-collector-typing';
@@ -403,9 +412,9 @@
 			submission_uuid: session.uuid,
 			time_spent: Math.max(1, Math.floor((Date.now() - session.startedAt) / 1000)),
 			answers: session.answers,
-			conversion_page: window.location.href,
+			conversion_page: pageUrlWithoutClickIds(),
 			hub_collector_hp: '',
-			ad_user_data_consent: window.HubConsent ? (window.HubConsent.status || 'unknown') : 'granted',
+			ad_user_data_consent: window.HubConsent && typeof window.HubConsent.getStatus === 'function' ? window.HubConsent.getStatus() : 'unknown',
 		};
 
 		fetch(config.api_url, {

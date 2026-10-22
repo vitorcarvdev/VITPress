@@ -47,6 +47,19 @@
 		return uuid;
 	}
 
+	// Atribuição operacional não pode carregar identificadores de clique sem consentimento.
+	function stripClickIds(value) {
+		if (!value || value.indexOf('?') === -1) return value;
+		var hashAt = value.indexOf('#');
+		var hash = hashAt === -1 ? '' : value.slice(hashAt);
+		var url = hashAt === -1 ? value : value.slice(0, hashAt);
+		var queryAt = url.indexOf('?');
+		var kept = url.slice(queryAt + 1).split('&').filter(function(pair) {
+			return pair !== '' && marketingParams.indexOf(pair.split('=')[0].toLowerCase()) === -1;
+		});
+		return url.slice(0, queryAt) + (kept.length ? '?' + kept.join('&') : '') + hash;
+	}
+
 	function processParams(paramsList) {
 		if (!getCookie('hub_session_id')) {
 			paramsList.forEach(function(param) {
@@ -75,10 +88,10 @@
 			setCookie('hub_session_id', generateUUID(), 30);
 			setCookie('hub_first_visit_datetime', new Date().toISOString(), 30);
 			var ref = document.referrer || '';
-			setCookie('hub_external_referrer', ref, 30);
-			setCookie('hub_landing_url', window.location.href, 30);
+			setCookie('hub_external_referrer', stripClickIds(ref), 30);
+			setCookie('hub_landing_url', stripClickIds(window.location.href), 30);
 			setCookie('hub_landing_path', window.location.pathname, 30);
-			setCookie('hub_landing_query', window.location.search, 30);
+			setCookie('hub_landing_query', stripClickIds(window.location.search), 30);
 		}
 
 		processParams(operationalParams);

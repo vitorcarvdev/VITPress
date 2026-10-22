@@ -24,10 +24,11 @@ class MetaConversionsProvider implements ConversionProviderInterface {
 	}
 
 	public function is_configured() {
-		return $this->enabled && ! empty( $this->pixel_id ) && ! empty( $this->access_token );
+		return false;
 	}
 
 	public function send_event( $event_name, array $lead_data, array $event_data = array(), $transaction_id = "" ) {
+		return;
 		$now = current_time("mysql");
 		$status = "processing";
 

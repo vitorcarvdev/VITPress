@@ -9,7 +9,7 @@ $title         = $lead ? 'Editar ' . $lead_singular . ': ' . esc_html( $lead->na
 $stages   = $profile->get_pipeline_stages();
 $statuses = isset( $profile->get_statuses()['lead'] ) ? $profile->get_statuses()['lead'] : array( 'novo' => 'Novo' );
 
-$is_client = ( $lead && 'cliente' === $lead->stage );
+$is_client = ( $lead && 'won' === \Hub\Modules\Pipeline\PipelineModule::normalize_stage( $lead->stage ) );
 $empresa_disabled_attr = $is_client ? '' : 'disabled="disabled" readonly="readonly"';
 $empresa_disabled_class = $is_client ? '' : 'hub-disabled-tab';
 ?>
@@ -51,7 +51,7 @@ $empresa_disabled_class = $is_client ? '' : 'hub-disabled-tab';
 						<td>
 							<select name="stage" id="stage" class="regular-text">
 								<?php foreach ( $stages as $slug => $label ) : ?>
-									<option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $lead ? $lead->stage : '', $slug ); ?>>
+									<option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $lead ? \Hub\Modules\Pipeline\PipelineModule::normalize_stage( $lead->stage ) : '', $slug ); ?>>
 										<?php echo esc_html( $label ); ?>
 									</option>
 								<?php endforeach; ?>

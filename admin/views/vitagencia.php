@@ -4,6 +4,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'geral';
+if ( 'trafego' === $active_tab ) {
+	$active_tab = 'geral';
+}
 
 // Helper vars para abas de configurações
 $plugin_protection = isset( $settings['plugin_protection'] ) && is_array( $settings['plugin_protection'] )
@@ -43,15 +46,13 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 	<p>Esta área é de uso exclusivo da equipe técnica VitAgência. Configurações avançadas de IA, manutenção, integrações e segurança são gerenciadas aqui.</p>
 
 	<h2 class="nav-tab-wrapper">
-		<a href="?page=hub-vitagencia&tab=geral" class="nav-tab <?php echo 'geral' === $active_tab ? 'nav-tab-active' : ''; ?>">Licença & APIs</a>
+		<a href="?page=hub-vitagencia&tab=geral" class="nav-tab <?php echo 'geral' === $active_tab ? 'nav-tab-active' : ''; ?>">Marketing</a>
 		<a href="?page=hub-vitagencia&tab=lgpd" class="nav-tab <?php echo 'lgpd' === $active_tab ? 'nav-tab-active' : ''; ?>">LGPD</a>
-		<a href="?page=hub-vitagencia&tab=diagnostico" class="nav-tab <?php echo 'diagnostico' === $active_tab ? 'nav-tab-active' : ''; ?>">Diagnóstico</a>
 		<a href="?page=hub-vitagencia&tab=backup" class="nav-tab <?php echo 'backup' === $active_tab ? 'nav-tab-active' : ''; ?>">Backup</a>
 		<a href="?page=hub-vitagencia&tab=emails" class="nav-tab <?php echo 'emails' === $active_tab ? 'nav-tab-active' : ''; ?>">E-mails</a>
 		<a href="?page=hub-vitagencia&tab=seguranca" class="nav-tab <?php echo 'seguranca' === $active_tab ? 'nav-tab-active' : ''; ?>">Segurança do WP</a>
-		<a href="?page=hub-vitagencia&tab=trafego" class="nav-tab <?php echo 'trafego' === $active_tab ? 'nav-tab-active' : ''; ?>">Tráfego & Conversão</a>
+		<a href="?page=hub-vitagencia&tab=diagnostico" class="nav-tab <?php echo 'diagnostico' === $active_tab ? 'nav-tab-active' : ''; ?>">Diagnóstico</a>
 		<a href="?page=hub-vitagencia&tab=tracker" class="nav-tab <?php echo 'tracker' === $active_tab ? 'nav-tab-active' : ''; ?>">Tracker</a>
-		<a href="?page=hub-vitagencia&tab=google-ads-export" class="nav-tab <?php echo 'google-ads-export' === $active_tab ? 'nav-tab-active' : ''; ?>">Exportar Google Ads</a>
 	</h2>
 
 	<?php if ( isset( $_GET['message'] ) ) : ?>
@@ -87,11 +88,15 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 
 	<div class="hub-tab-content" style="margin-top: 20px;">
 		<?php
+		if ( 'google-ads-export' === $active_tab ) {
+			echo '<div class="notice notice-info"><p>A exportação CSV de compras offline foi desativada. As conversões de Google Ads e Meta Ads são gerenciadas centralmente pelo VitAds.</p></div>';
+		} else {
 		$tab_file = HUB_PATH . 'admin/views/vitagencia-' . $active_tab . '.php';
 		if ( file_exists( $tab_file ) ) {
 			require_once $tab_file;
 		} else {
 			echo '<div class="notice notice-error"><p>' . esc_html__( 'Aba não encontrada.', 'hub' ) . '</p></div>';
+		}
 		}
 		?>
 	</div>

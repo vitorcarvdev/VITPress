@@ -28,6 +28,8 @@ class GoogleAdsOfflineExportService {
 
 		check_admin_referer( 'hub_export_offline_conversions', 'hub_nonce' );
 
+		wp_die( 'A exportação CSV de compras offline foi desativada. As conversões seguem pelo VitAds.' );
+
 		$action = isset( $_POST['export_action'] ) ? sanitize_text_field( $_POST['export_action'] ) : 'pending';
 		$batch_id = isset( $_POST['batch_id'] ) ? sanitize_text_field( $_POST['batch_id'] ) : '';
 

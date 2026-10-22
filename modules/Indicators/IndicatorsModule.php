@@ -64,19 +64,19 @@ class IndicatorsModule extends AbstractModule {
 		
 		// Converted uses updated_at for the date of conversion
 		$date_filter_updated = str_replace('created_at', 'updated_at', $date_filter);
-		$converted_leads = (int) $db->get_var( "SELECT COUNT(*) FROM {$table_leads} WHERE stage = 'cliente' {$date_filter_updated}" );
+		$converted_leads = (int) $db->get_var( "SELECT COUNT(*) FROM {$table_leads} WHERE stage IN ('cliente','ganho','fechado','won') {$date_filter_updated}" );
 		
-		$lost_leads      = (int) $db->get_var( "SELECT COUNT(*) FROM {$table_leads} WHERE stage = 'perdido' {$date_filter_updated}" );
+		$lost_leads      = (int) $db->get_var( "SELECT COUNT(*) FROM {$table_leads} WHERE stage IN ('perdido','descartado','arquivado','lost') {$date_filter_updated}" );
 		$total_clients   = (int) $db->get_var( "SELECT COUNT(*) FROM {$table_clients} {$where_clause} {$date_filter}" ); // Total of companies
 
 		$conversion_rate = $total_leads > 0 ? round( ( $converted_leads / $total_leads ) * 100, 1 ) : 0;
 
-		$total_revenue = (float) $db->get_var( "SELECT SUM(revenue_value) FROM {$table_leads} WHERE stage = 'cliente' {$date_filter_updated}" );
+		$total_revenue = (float) $db->get_var( "SELECT SUM(revenue_value) FROM {$table_leads} WHERE stage IN ('cliente','ganho','fechado','won') {$date_filter_updated}" );
 		$avg_ticket    = $converted_leads > 0 ? ( $total_revenue / $converted_leads ) : 0.00;
 
 		// Últimas conversões (Leads que atingiram o estágio cliente)
 		$recent_conversions = $db->get_results(
-			"SELECT id, name, email, phone, created_at AS lead_created, updated_at AS created_at FROM {$table_leads} WHERE stage = 'cliente' {$date_filter_updated} ORDER BY updated_at DESC LIMIT 10"
+			"SELECT id, name, email, phone, created_at AS lead_created, updated_at AS created_at FROM {$table_leads} WHERE stage IN ('cliente','ganho','fechado','won') {$date_filter_updated} ORDER BY updated_at DESC LIMIT 10"
 		);
 
 		// ==========================================
@@ -150,13 +150,13 @@ class IndicatorsModule extends AbstractModule {
 		if ( ! empty( $cohort_ids ) ) {
 			// Current stage checks (implies they reached it)
 			foreach ( $cohort_leads as $lead ) {
-				if ( in_array( $lead->stage, array( 'avaliacao', 'proposta_enviada', 'cliente' ) ) ) {
+				if ( in_array( $lead->stage, array( 'avaliacao', 'qualificado', 'em_atendimento', 'presentation', 'proposta_enviada', 'proposta', 'negociacao', 'negotiating', 'cliente', 'ganho', 'fechado', 'won' ), true ) ) {
 					$reached_avaliacao[ $lead->id ] = true;
 				}
-				if ( in_array( $lead->stage, array( 'proposta_enviada', 'cliente' ) ) ) {
+				if ( in_array( $lead->stage, array( 'proposta_enviada', 'proposta', 'negociacao', 'negotiating', 'cliente', 'ganho', 'fechado', 'won' ), true ) ) {
 					$reached_proposta[ $lead->id ] = true;
 				}
-				if ( 'cliente' === $lead->stage ) {
+				if ( in_array( $lead->stage, array( 'cliente', 'ganho', 'fechado', 'won' ), true ) ) {
 					$reached_cliente[ $lead->id ] = true;
 				}
 			}

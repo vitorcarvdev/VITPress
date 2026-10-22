@@ -31,9 +31,9 @@ class PipelineModule extends AbstractModule {
 	}
 
 	public function init() {
-		// Interface estritamente somente leitura.
-		// Sem handlers AJAX de escrita ou alteração de estado nesta tela.
+		// O Kanban administrativo permanece somente leitura.
 		add_action( 'wp_ajax_hub_delete_lead', array( $this, 'ajax_delete_lead' ) );
+		MobilePipeline::boot();
 	}
 
 	public function ajax_delete_lead() {
@@ -93,18 +93,54 @@ class PipelineModule extends AbstractModule {
 	 *
 	 * @return array
 	 */
-	public static function get_canonical_stages() {
+	/**
+	 * Etapas comerciais na mesma ordem e com os mesmos nomes do VitZap.
+	 * A chave é estável. O marco não é enviado a nenhum serviço externo.
+	 *
+	 * @return array<string, array{label: string, commercial_event: string}>
+	 */
+	public static function get_stage_definitions() {
 		return array(
-			'novo_interessado' => 'Novo Interessado',
-			'avaliacao'        => 'Avaliação',
-			'proposta_enviada' => 'Proposta Enviada',
-			'cliente'          => 'Cliente',
-			'perdido'          => 'Perdido',
+			'presentation'  => array(
+				'label'            => 'Apresentação',
+				'commercial_event' => 'LEAD_QUALIFIED',
+			),
+			'negotiating'   => array(
+				'label'            => 'Negociando',
+				'commercial_event' => 'IN_PROGRESS',
+			),
+			'won'           => array(
+				'label'            => 'Cliente Fechado',
+				'commercial_event' => 'OPPORTUNITY_WON',
+			),
+			'lost'          => array(
+				'label'            => 'Cliente Perdido',
+				'commercial_event' => 'OPPORTUNITY_LOST',
+			),
+			'disqualified'  => array(
+				'label'            => 'Ruim / Desqualificado',
+				'commercial_event' => 'LEAD_DISQUALIFIED',
+			),
 		);
 	}
 
+	public static function get_canonical_stages() {
+		$stages = array();
+		foreach ( self::get_stage_definitions() as $key => $definition ) {
+			$stages[ $key ] = $definition['label'];
+		}
+		return $stages;
+	}
+
+	public static function is_valid_stage( $stage ) {
+		$stage = sanitize_key( $stage );
+		return isset( self::get_stage_definitions()[ $stage ] );
+	}
+
 	/**
-	 * Normaliza estágios legados para uma das 5 etapas oficiais.
+	 * Normaliza estágios legados para as etapas do VitZap sem regravar a tabela.
+	 * O funil antigo não tinha "Ruim / Desqualificado"; descartado continua em Cliente Perdido.
+	 * Não havia coluna anterior a Apresentação: Novo Interessado e Avaliação aparecem nela.
 	 *
 	 * @param string $stage
 	 * @return string
@@ -112,26 +148,104 @@ class PipelineModule extends AbstractModule {
 	public static function normalize_stage( $stage ) {
 		$stage = sanitize_key( $stage );
 		$mapping = array(
-			'novo'             => 'novo_interessado',
-			'novo_contato'     => 'novo_interessado',
-			'lead_inicial'     => 'novo_interessado',
-			'interessado'      => 'novo_interessado',
-			'novo_interessado' => 'novo_interessado',
-			'avaliacao'        => 'avaliacao',
-			'qualificado'      => 'avaliacao',
-			'em_atendimento'   => 'avaliacao',
-			'proposta_enviada' => 'proposta_enviada',
-			'proposta'         => 'proposta_enviada',
-			'negociacao'       => 'proposta_enviada',
-			'cliente'          => 'cliente',
-			'ganho'            => 'cliente',
-			'fechado'          => 'cliente',
-			'perdido'          => 'perdido',
-			'descartado'       => 'perdido',
-			'arquivado'        => 'perdido',
+			'presentation'     => 'presentation',
+			'novo'             => 'presentation',
+			'novo_contato'     => 'presentation',
+			'lead_inicial'     => 'presentation',
+			'interessado'      => 'presentation',
+			'novo_interessado' => 'presentation',
+			'avaliacao'        => 'presentation',
+			'qualificado'      => 'presentation',
+			'em_atendimento'   => 'presentation',
+			'negotiating'      => 'negotiating',
+			'proposta_enviada' => 'negotiating',
+			'proposta'         => 'negotiating',
+			'negociacao'       => 'negotiating',
+			'won'              => 'won',
+			'cliente'          => 'won',
+			'ganho'            => 'won',
+			'fechado'          => 'won',
+			'lost'             => 'lost',
+			'perdido'          => 'lost',
+			'descartado'       => 'lost',
+			'arquivado'        => 'lost',
+			'disqualified'     => 'disqualified',
 		);
 
-		return isset( $mapping[ $stage ] ) ? $mapping[ $stage ] : 'novo_interessado';
+		return isset( $mapping[ $stage ] ) ? $mapping[ $stage ] : 'presentation';
+	}
+
+	/**
+	 * Grava somente a etapa. Não altera nome, nota ou valor.
+	 * Não dispara hooks de conversão.
+	 *
+	 * @param int         $lead_id
+	 * @param string      $stage
+	 * @param string      $source vitpress_admin|vitpress_mobile|form
+	 * @param string|null $previous_raw Etapa lida antes de outro UPDATE.
+	 * @return array|\WP_Error
+	 */
+	public static function change_stage( $lead_id, $stage, $source, $previous_raw = null ) {
+		global $wpdb;
+
+		$lead_id = (int) $lead_id;
+		$stage   = sanitize_key( $stage );
+		$source  = sanitize_key( $source );
+		$allowed_sources = array( 'vitpress_admin', 'vitpress_mobile', 'form' );
+
+		if ( $lead_id <= 0 ) {
+			return new \WP_Error( 'invalid_lead', 'ID inválido.', array( 'status' => 400 ) );
+		}
+		if ( ! self::is_valid_stage( $stage ) ) {
+			return new \WP_Error( 'invalid_stage', 'Etapa inválida.', array( 'status' => 400 ) );
+		}
+		if ( ! in_array( $source, $allowed_sources, true ) ) {
+			return new \WP_Error( 'invalid_source', 'Origem inválida.', array( 'status' => 400 ) );
+		}
+
+		$table = Database::table( 'leads' );
+		$lead  = $wpdb->get_row( $wpdb->prepare( "SELECT id, stage, stage_updated_at FROM {$table} WHERE id = %d", $lead_id ) );
+		if ( ! $lead ) {
+			return new \WP_Error( 'not_found', 'Lead não encontrado.', array( 'status' => 404 ) );
+		}
+
+		$previous = self::normalize_stage( null !== $previous_raw ? $previous_raw : $lead->stage );
+		if ( $previous === $stage ) {
+			return array(
+				'changed'          => false,
+				'id'               => $lead_id,
+				'stage'            => $stage,
+				'stage_label'      => self::get_canonical_stages()[ $stage ],
+				'stage_updated_at' => $lead->stage_updated_at,
+				'stage_source'     => $source,
+			);
+		}
+
+		$now     = current_time( 'mysql' );
+		$updated = $wpdb->update(
+			$table,
+			array(
+				'stage'            => $stage,
+				'stage_updated_at' => $now,
+				'stage_source'     => $source,
+			),
+			array( 'id' => $lead_id ),
+			array( '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		if ( false === $updated ) {
+			return new \WP_Error( 'db_error', 'Não foi possível salvar a etapa.', array( 'status' => 500 ) );
+		}
+
+		return array(
+			'changed'          => true,
+			'id'               => $lead_id,
+			'stage'            => $stage,
+			'stage_label'      => self::get_canonical_stages()[ $stage ],
+			'stage_updated_at' => $now,
+			'stage_source'     => $source,
+		);
 	}
 
 	/**
@@ -394,11 +508,11 @@ class PipelineModule extends AbstractModule {
 
 		// Agrupa os leads por etapa canônica
 		$leads_by_stage = array(
-			'novo_interessado' => array(),
-			'avaliacao'        => array(),
-			'proposta_enviada' => array(),
-			'cliente'          => array(),
-			'perdido'          => array(),
+			'presentation' => array(),
+			'negotiating'  => array(),
+			'won'          => array(),
+			'lost'         => array(),
+			'disqualified' => array(),
 		);
 
 		$waiting_attempts_count = 0;
@@ -409,12 +523,12 @@ class PipelineModule extends AbstractModule {
 				$target_stage = $card['stage'];
 
 				if ( ! isset( $leads_by_stage[ $target_stage ] ) ) {
-					$target_stage = 'novo_interessado';
+					$target_stage = 'presentation';
 				}
 
 				$leads_by_stage[ $target_stage ][] = $card;
 
-				if ( 'novo_interessado' === $target_stage && 0 === $card['attempts_count'] && strtotime( $card['created_at'] ) >= strtotime( $cutoff_date ) ) {
+				if ( 'presentation' === $target_stage && 0 === $card['attempts_count'] && strtotime( $card['created_at'] ) >= strtotime( $cutoff_date ) ) {
 					$waiting_attempts_count++;
 				}
 			}

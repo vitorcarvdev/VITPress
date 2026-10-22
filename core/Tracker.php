@@ -38,16 +38,10 @@ class Tracker {
 			true
 		);
 
-		$settings = get_option( 'hub_settings', array() );
-		$meta_ads = isset( $settings['meta_ads'] ) ? $settings['meta_ads'] : array();
-		$meta_enabled = ! empty( $meta_ads['enabled'] );
-		$meta_pixel_id = $meta_ads['pixel_id'] ?? '';
-		$meta_debug = ! empty( $meta_ads['debug_mode'] );
-
 		wp_localize_script( 'hub-tracker-js', 'hubTrackerConfig', array(
-			'meta_enabled'  => $meta_enabled,
-			'meta_pixel_id' => $meta_pixel_id,
-			'meta_debug'    => $meta_debug,
+			'meta_enabled'  => false,
+			'meta_pixel_id' => '',
+			'meta_debug'    => false,
 		) );
 	}
 
