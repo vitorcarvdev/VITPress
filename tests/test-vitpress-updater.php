@@ -65,7 +65,7 @@ function site_url() {
     return 'https://cliente.exemplo.com';
 }
 function get_plugin_data( $file ) {
-    return [ 'Version' => '1.9.0', 'Name' => 'VitPress' ];
+    return [ 'Version' => '1.9.1', 'Name' => 'VitPress' ];
 }
 function is_plugin_active( $file ) {
     return $file === 'hub-vitagencia/hub.php';
@@ -161,7 +161,7 @@ function remote( $data, $code = 200 ) {
 
 function transient_with( $checked = true ) {
     $transient = new stdClass();
-    $transient->checked = $checked ? [ 'hub-vitagencia/hub.php' => '1.9.0' ] : [];
+    $transient->checked = $checked ? [ 'hub-vitagencia/hub.php' => '1.9.1' ] : [];
     $transient->response = [];
     $transient->no_update = [];
     return $transient;
@@ -172,9 +172,9 @@ $header = file_get_contents( $root . '/hub.php' );
 $config = file_get_contents( $root . '/config/config.php' );
 $updater_source = file_get_contents( $root . '/core/class-hub-vitagencia-updater.php' );
 
-check( preg_match( '/^\s*\*\s*Version:\s*1\.9\.0\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.9.0' );
-check( strpos( $header, "define( 'HUB_VERSION', '1.9.0' );" ) !== false, 'constante HUB_VERSION é 1.9.0' );
-check( strpos( $config, "'version'             => '1.9.0'" ) !== false, 'metadado interno de versão é 1.9.0' );
+check( preg_match( '/^\s*\*\s*Version:\s*1\.9\.1\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.9.1' );
+check( strpos( $header, "define( 'HUB_VERSION', '1.9.1' );" ) !== false, 'constante HUB_VERSION é 1.9.1' );
+check( strpos( $config, "'version'             => '1.9.1'" ) !== false, 'metadado interno de versão é 1.9.1' );
 check( strpos( $header, 'Plugin Name: VitPress' ) !== false, 'nome oficial permanece VitPress' );
 
 reset_state();
@@ -188,7 +188,7 @@ remote( [ 'update_available' => false ] );
 $result = updater()->check_for_updates( transient_with() );
 check( empty( $result->response['hub-vitagencia/hub.php'] ), 'versão igual publicada não oferece atualização' );
 check( isset( $result->no_update['hub-vitagencia/hub.php'] ), 'versão igual fica em no_update' );
-check( $state['bodies'][0]['current_version'] === '1.9.0', 'check envia a versão instalada 1.9.0' );
+check( $state['bodies'][0]['current_version'] === '1.9.1', 'check envia a versão instalada 1.9.1' );
 check( $state['bodies'][0]['uuid'] === '12345678-1234-4234-8234-123456789abc', 'check envia o UUID estável' );
 check( $state['bodies'][0]['domain'] === 'cliente.exemplo.com', 'check envia o domínio' );
 check( $state['bodies'][0]['wordpress_version'] === '6.7', 'check envia a versão do WordPress' );
@@ -200,7 +200,7 @@ reset_state();
 $package = 'https://vitads.vitagencia.com.br/api/v1/vitpress/updates/download?token=abc123';
 remote( [
     'update_available' => true,
-    'version' => '1.9.1',
+    'version' => '1.9.2',
     'requires_wp' => '5.8',
     'requires_php' => '8.2',
     'changelog' => "Correção\n<script>alert(1)</script>",
@@ -210,19 +210,19 @@ remote( [
 $result = updater()->check_for_updates( transient_with() );
 $offer = $result->response['hub-vitagencia/hub.php'] ?? null;
 check( is_object( $offer ) && $offer->plugin === 'hub-vitagencia/hub.php', 'atualização usa hub-vitagencia/hub.php' );
-check( is_object( $offer ) && $offer->new_version === '1.9.1' && $offer->package === $package, 'WordPress recebe versão e package_url exata' );
+check( is_object( $offer ) && $offer->new_version === '1.9.2' && $offer->package === $package, 'WordPress recebe versão e package_url exata' );
 check( is_object( $offer ) && $offer->requires === '5.8' && $offer->requires_php === '8.2', 'metadados requires_wp e requires_php são aplicados' );
 check( empty( $state['transients']['hub_vitagencia_vitads_check']['package_url'] ), 'token de download não fica no cache' );
 
 reset_state();
 remote( [
     'update_available' => true,
-    'version' => '1.9.2',
+    'version' => '1.9.3',
     'package_url' => $package,
     'changelog' => 'Canal de teste',
 ] );
 $test_channel = updater()->check_for_updates( transient_with() );
-check( ( $test_channel->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.2', 'resposta de canal test entra na atualização padrão' );
+check( ( $test_channel->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.3', 'resposta de canal test entra na atualização padrão' );
 
 reset_state();
 $state['remote'] = new WP_Error( 'http_request_failed', 'falha' );
@@ -306,7 +306,7 @@ $details = updater()->plugins_api_handler( false, 'plugin_information', (object)
 check( is_object( $details ) && $details->name === 'VitPress' && $details->version === '1.9.1', 'tela de detalhes recebe VitPress e a versão nova' );
 check( is_object( $details ) && strpos( $details->sections['changelog'], '12345678-1234-4234-8234-123456789abc' ) === false, 'a tela de detalhes não expõe o UUID' );
 
-$zip_path = dirname( $root ) . '/vitpress-v1.9.0.zip';
+$zip_path = dirname( $root ) . '/vitpress-v1.9.1.zip';
 if ( is_file( $zip_path ) ) {
     unlink( $zip_path );
 }
@@ -340,7 +340,7 @@ if ( $opened === true ) {
     check( in_array( 'hub-vitagencia/hub.php', $names, true ), 'ZIP contém hub-vitagencia/hub.php' );
     check( $parallel === [], 'ZIP não cria a pasta vitpress/' );
     $main = file_get_contents( 'zip://' . $zip_path . '#hub-vitagencia/hub.php' );
-    check( strpos( $main, 'Version: 1.9.0' ) !== false, 'hub.php dentro do ZIP está na versão 1.9.0' );
+    check( strpos( $main, 'Version: 1.9.1' ) !== false, 'hub.php dentro do ZIP está na versão 1.9.1' );
 }
 
 echo "\nRESULTADO: {$pass} pass, {$fail} fail\n";
