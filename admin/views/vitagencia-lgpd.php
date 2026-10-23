@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $settings = get_option( 'hub_settings', array() );
 $privacy = isset( $settings['privacy'] ) ? $settings['privacy'] : array();
 $banner_enabled = ! empty( $privacy['banner_enabled'] );
-$banner_text = isset( $privacy['banner_text'] ) && ! empty( $privacy['banner_text'] ) ? $privacy['banner_text'] : 'Utilizamos cookies para medir o desempenho de nossas campanhas. Saiba mais em nossa Política de Privacidade.';
+$banner_text = \Hub\Core\Services\PrivacyService::message( $privacy['banner_text'] ?? '' );
 
 // Sincroniza a política do Hub com a oficial do WordPress
 $wp_policy_page = get_option('wp_page_for_privacy_policy');
@@ -28,14 +28,14 @@ $policy_page = $wp_policy_page ? intval($wp_policy_page) : (isset( $privacy['pol
 						<input type="checkbox" name="privacy_banner_enabled" value="1" <?php checked( $banner_enabled ); ?>>
 						<strong>Ativar Banner de Consentimento</strong>
 					</label>
-					<p class="description">Exibe um banner simples (Aceitar/Recusar) para novos visitantes. Integrado nativamente com Tracker, Google Consent Mode e formulários.</p>
+					<p class="description">Exibe uma janela central (Aceitar/Recusar) que pede uma escolha antes da navegação. Integrado nativamente com Tracker, Google Consent Mode e formulários.</p>
 				</td>
 			</tr>
 			<tr>
 				<th scope="row">Mensagem do Banner</th>
 				<td>
 					<textarea name="privacy_banner_text" rows="3" class="large-text"><?php echo esc_textarea( $banner_text ); ?></textarea>
-					<p class="description">Para criar um link na mensagem, a expressão "Política de Privacidade" será transformada automaticamente em um link se uma página estiver selecionada abaixo.</p>
+					<p class="description">O link "Política de Privacidade" aparece abaixo dos botões quando uma página estiver selecionada. Um link com a classe <code>hub-reset-consent</code> reabre as preferências.</p>
 				</td>
 			</tr>
 			<tr>

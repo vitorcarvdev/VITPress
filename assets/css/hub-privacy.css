@@ -1,77 +1,136 @@
-.hub-consent-banner {
-	position: fixed;
-	bottom: 0;
-	left: 0;
-	width: 100%;
-	background: #ffffff;
-	box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
-	z-index: 999999;
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+html.hub-consent-open,
+html.hub-consent-open body {
+	overflow: hidden !important;
 }
-.hub-consent-container {
-	max-width: 1200px;
-	margin: 0 auto;
-	padding: 15px 20px;
+.hub-consent-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483000;
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: 15px;
+	justify-content: center;
+	padding: 16px;
+	background: rgba(15, 23, 42, 0.62);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	animation: hub-consent-fade 0.2s ease-out;
+}
+.hub-consent-overlay[hidden],
+.hub-consent-manage[hidden] {
+	display: none !important;
+}
+.hub-consent-modal {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 440px;
+	max-height: calc(100vh - 32px);
+	overflow-y: auto;
+	padding: 28px 24px 18px;
+	background: #ffffff;
+	border-radius: 14px;
+	box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+	text-align: center;
+	outline: none;
 }
 .hub-consent-text {
-	flex: 1;
-	min-width: 300px;
-	font-size: 14px;
-	color: #333333;
-	line-height: 1.5;
-}
-.hub-consent-text a {
-	color: #2271b1;
-	text-decoration: underline;
+	margin: 0 0 22px !important;
+	font-size: 16px !important;
+	line-height: 1.55 !important;
+	color: #1f2937 !important;
 }
 .hub-consent-actions {
 	display: flex;
+	flex-direction: column;
 	gap: 10px;
-	flex-shrink: 0;
 }
 .hub-btn {
-	padding: 6px 14px !important;
-	border: none !important;
-	border-radius: 4px !important;
-	font-size: 14px !important;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0 !important;
+	padding: 12px 16px !important;
+	border-radius: 8px !important;
+	font-family: inherit !important;
+	font-size: 15px !important;
 	font-weight: 600 !important;
 	line-height: 1.2 !important;
 	height: auto !important;
-	min-height: 0 !important;
+	min-height: 44px !important;
+	text-transform: none !important;
+	letter-spacing: normal !important;
 	cursor: pointer;
-	transition: background 0.2s ease;
+	transition: background 0.2s ease, border-color 0.2s ease;
 }
 .hub-btn-accept {
 	background: #2271b1 !important;
-	color: #fff !important;
+	border: 1px solid #2271b1 !important;
+	color: #ffffff !important;
 }
 .hub-btn-accept:hover {
 	background: #135e96 !important;
+	border-color: #135e96 !important;
 }
 .hub-btn-reject {
-	background: #f0f0f1 !important;
-	color: #333 !important;
-	border: 1px solid #c3c4c7 !important;
+	background: #ffffff !important;
+	border: 1px solid #9ca3af !important;
+	color: #1f2937 !important;
 }
 .hub-btn-reject:hover {
-	background: #dcdcde !important;
+	background: #f3f4f6 !important;
 }
-@media (max-width: 768px) {
-	.hub-consent-container {
-		flex-direction: column;
-		align-items: stretch;
-		text-align: center;
-	}
+.hub-btn:focus-visible,
+.hub-consent-policy:focus-visible,
+.hub-consent-manage:focus-visible {
+	outline: 3px solid #f59e0b !important;
+	outline-offset: 2px !important;
+}
+.hub-consent-policy {
+	display: inline-block;
+	margin-top: 16px;
+	font-size: 12px !important;
+	color: #6b7280 !important;
+	text-decoration: underline !important;
+}
+.hub-consent-policy:hover {
+	color: #374151 !important;
+}
+.hub-consent-manage {
+	position: fixed;
+	left: 12px;
+	bottom: 12px;
+	z-index: 2147482999;
+	margin: 0 !important;
+	padding: 6px 12px !important;
+	min-height: 0 !important;
+	border: 1px solid #d1d5db !important;
+	border-radius: 999px !important;
+	background: rgba(255, 255, 255, 0.92) !important;
+	color: #4b5563 !important;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+	font-size: 12px !important;
+	font-weight: 500 !important;
+	line-height: 1.3 !important;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+	cursor: pointer;
+}
+.hub-consent-manage:hover {
+	color: #111827 !important;
+}
+@media (min-width: 480px) {
 	.hub-consent-actions {
-		justify-content: center;
-		width: 100%;
+		flex-direction: row;
 	}
 	.hub-btn {
-		flex: 1;
+		flex: 1 1 0;
+	}
+}
+@keyframes hub-consent-fade {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.hub-consent-overlay {
+		animation: none;
+	}
+	.hub-btn {
+		transition: none;
 	}
 }
