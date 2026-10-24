@@ -108,7 +108,8 @@ $start = (string) ( $decoded['start_url'] ?? '' );
 $scope = (string) ( $decoded['scope'] ?? '' );
 check( is_array( $decoded ) && 'VitPress' === ( $decoded['name'] ?? '' ) && 'Pipeline' === ( $decoded['short_name'] ?? '' ) && 'standalone' === ( $decoded['display'] ?? '' ) && '#1b4d3e' === ( $decoded['theme_color'] ?? '' ) && '#f4f7f6' === ( $decoded['background_color'] ?? '' ), 'manifest válido' );
 check( '/' === substr( $start, 0, 1 ) && false === strpos( $start, 'localhost' ) && false !== strpos( $start, '/pipeline/' ) && $scope === $start && false !== strpos( $scope, '/pipeline/' ), 'start_url e scope ficam em /pipeline/ sem host' );
-$origin = wp_parse_url( home_url( '/' ), PHP_URL_SCHEME ) . '://' . wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+$home_parts = wp_parse_url( home_url( '/' ) );
+$origin     = $home_parts['scheme'] . '://' . $home_parts['host'] . ( isset( $home_parts['port'] ) ? ':' . $home_parts['port'] : '' );
 $icon_ok = 0;
 foreach ( $decoded['icons'] ?? array() as $icon ) {
 	if ( ! in_array( $icon['sizes'] ?? '', array( '192x192', '512x512' ), true ) ) {

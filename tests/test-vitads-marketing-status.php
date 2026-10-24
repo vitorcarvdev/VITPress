@@ -85,8 +85,17 @@ check( 0 === $http_calls, 'desligado não chama o VitAds' );
 $home = wp_remote_get( home_url( '/' ), array( 'timeout' => 8, 'redirection' => 0 ) );
 check( ! is_wp_error( $home ) && 200 === (int) wp_remote_retrieve_response_code( $home ), 'site continua respondendo' );
 $pipeline = wp_remote_get( home_url( '/pipeline/' ), array( 'timeout' => 8, 'redirection' => 0 ) );
-$location = is_wp_error( $pipeline ) ? '' : (string) wp_remote_retrieve_header( $pipeline, 'location' );
-check( ! is_wp_error( $pipeline ) && false !== strpos( $location, 'pipeline' ), 'pipeline continua exigindo sessão' );
+// Contrato atual: sem sessão, 200 com a página de login e redirecionamento por JavaScript para /pipeline/; nunca conteúdo de leads.
+$guest_body = is_wp_error( $pipeline ) ? '' : (string) wp_remote_retrieve_body( $pipeline );
+check(
+	! is_wp_error( $pipeline )
+	&& 200 === (int) wp_remote_retrieve_response_code( $pipeline )
+	&& false !== strpos( $guest_body, 'wp-login.php' )
+	&& false !== strpos( $guest_body, 'location.replace' )
+	&& false !== strpos( $guest_body, 'pipeline' )
+	&& false === strpos( $guest_body, 'vp-card' ),
+	'pipeline continua exigindo sessão'
+);
 $form = file_get_contents( dirname( __DIR__ ) . '/core/Services/FrontendFormService.php' );
 $collector = file_get_contents( dirname( __DIR__ ) . '/core/Services/LeadCollectorService.php' );
 check( false !== strpos( $form, '/leads' ) && false !== strpos( $collector, '/collector/submit' ), 'formulário e captador permanecem' );
