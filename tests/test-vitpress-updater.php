@@ -65,7 +65,7 @@ function site_url() {
     return 'https://cliente.exemplo.com';
 }
 function get_plugin_data( $file ) {
-    return [ 'Version' => '1.9.0', 'Name' => 'VitPress' ];
+    return [ 'Version' => isset( $GLOBALS['hub_test_installed_version'] ) ? $GLOBALS['hub_test_installed_version'] : '1.9.0', 'Name' => 'VitPress' ];
 }
 function is_plugin_active( $file ) {
     return $file === 'hub-vitagencia/hub.php';
@@ -172,9 +172,9 @@ $header = file_get_contents( $root . '/hub.php' );
 $config = file_get_contents( $root . '/config/config.php' );
 $updater_source = file_get_contents( $root . '/core/class-hub-vitagencia-updater.php' );
 
-check( preg_match( '/^\s*\*\s*Version:\s*1\.10\.0\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.10.0' );
-check( strpos( $header, "define( 'HUB_VERSION', '1.10.0' );" ) !== false, 'constante HUB_VERSION é 1.10.0' );
-check( strpos( $config, "'version'             => '1.10.0'" ) !== false, 'metadado interno de versão é 1.10.0' );
+check( preg_match( '/^\s*\*\s*Version:\s*1\.9\.2\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.9.2' );
+check( strpos( $header, "define( 'HUB_VERSION', '1.9.2' );" ) !== false, 'constante HUB_VERSION é 1.9.2' );
+check( strpos( $config, "'version'             => '1.9.2'" ) !== false, 'metadado interno de versão é 1.9.2' );
 check( strpos( $header, 'Plugin Name: VitPress' ) !== false, 'nome oficial permanece VitPress' );
 
 reset_state();
@@ -223,6 +223,24 @@ remote( [
 ] );
 $test_channel = updater()->check_for_updates( transient_with() );
 check( ( $test_channel->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.2', 'resposta de canal test entra na atualização padrão' );
+
+// Atualização 1.9.1 -> 1.9.2 (instalação em 1.9.1; o fixture padrão continua simulando 1.9.0).
+$GLOBALS['hub_test_installed_version'] = '1.9.1';
+reset_state();
+remote( [ 'update_available' => true, 'version' => '1.9.2', 'package_url' => $package, 'changelog' => 'Correção' ] );
+$from_191 = updater()->check_for_updates( transient_with() );
+check( $state['bodies'][0]['current_version'] === '1.9.1', '1.9.1 -> 1.9.2: check envia a versão instalada 1.9.1' );
+check( ( $from_191->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.2', '1.9.1 -> 1.9.2: WordPress recebe a oferta da 1.9.2' );
+$GLOBALS['hub_test_installed_version'] = '1.9.2';
+reset_state();
+remote( [ 'update_available' => true, 'version' => '1.9.2', 'package_url' => $package, 'changelog' => 'Correção' ] );
+$same_192 = updater()->check_for_updates( transient_with() );
+check( empty( $same_192->response['hub-vitagencia/hub.php'] ) && isset( $same_192->no_update['hub-vitagencia/hub.php'] ), '1.9.2 instalada não é reoferecida como atualização' );
+reset_state();
+remote( [ 'update_available' => true, 'version' => '1.9.10', 'package_url' => $package, 'changelog' => 'Futura' ] );
+$newer_patch = updater()->check_for_updates( transient_with() );
+check( ( $newer_patch->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.10', 'comparação numérica: 1.9.10 é maior que 1.9.2' );
+unset( $GLOBALS['hub_test_installed_version'] );
 
 reset_state();
 $state['remote'] = new WP_Error( 'http_request_failed', 'falha' );
@@ -306,7 +324,7 @@ $details = updater()->plugins_api_handler( false, 'plugin_information', (object)
 check( is_object( $details ) && $details->name === 'VitPress' && $details->version === '1.9.1', 'tela de detalhes recebe VitPress e a versão nova' );
 check( is_object( $details ) && strpos( $details->sections['changelog'], '12345678-1234-4234-8234-123456789abc' ) === false, 'a tela de detalhes não expõe o UUID' );
 
-$zip_path = dirname( $root ) . '/vitpress-v1.10.0.zip';
+$zip_path = dirname( $root ) . '/vitpress-v1.9.2.zip';
 if ( is_file( $zip_path ) ) {
     unlink( $zip_path );
 }
@@ -340,7 +358,7 @@ if ( $opened === true ) {
     check( in_array( 'hub-vitagencia/hub.php', $names, true ), 'ZIP contém hub-vitagencia/hub.php' );
     check( $parallel === [], 'ZIP não cria a pasta vitpress/' );
     $main = file_get_contents( 'zip://' . $zip_path . '#hub-vitagencia/hub.php' );
-    check( strpos( $main, 'Version: 1.10.0' ) !== false, 'hub.php dentro do ZIP está na versão 1.10.0' );
+    check( strpos( $main, 'Version: 1.9.2' ) !== false, 'hub.php dentro do ZIP está na versão 1.9.2' );
 }
 
 echo "\nRESULTADO: {$pass} pass, {$fail} fail\n";

@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 return array(
 	// Informações de versão e infraestrutura
-	'version'             => '1.10.0',
+	'version'             => '1.9.2',
 	'crm_enabled'         => false,
 	'vcsis_connect_url'   => 'https://connect.vcsis.com.br/api/v1/updates/hub',
 	'vcsis_connect_token' => '',
