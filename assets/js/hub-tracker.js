@@ -47,15 +47,29 @@
 		return uuid;
 	}
 
-	function processParams(paramsList) {
-		if (!getCookie('hub_session_id')) {
-			paramsList.forEach(function(param) {
-				var val = getQueryParam(param);
-				if (val) {
-					setCookie('hub_first_touch_' + param, val, 30);
-				}
-			});
-		}
+	// Atribuição operacional não pode carregar identificadores de clique sem consentimento.
+	function stripClickIds(value) {
+		if (!value || value.indexOf('?') === -1) return value;
+		var hashAt = value.indexOf('#');
+		var hash = hashAt === -1 ? '' : value.slice(hashAt);
+		var url = hashAt === -1 ? value : value.slice(0, hashAt);
+		var queryAt = url.indexOf('?');
+		var kept = url.slice(queryAt + 1).split('&').filter(function(pair) {
+			return pair !== '' && marketingParams.indexOf(pair.split('=')[0].toLowerCase()) === -1;
+		});
+		return url.slice(0, queryAt) + (kept.length ? '?' + kept.join('&') : '') + hash;
+	}
+
+	function processParams(paramsList, firstTouchByCookie) {
+		// O cookie de sessão já existe quando os parâmetros são processados (o rastreador o cria antes) e, para
+		// identificadores de clique, o consentimento pode chegar depois. O primeiro toque é, portanto, o primeiro valor
+		// observado de cada parâmetro, não "a sessão é nova".
+		paramsList.forEach(function(param) {
+			var val = getQueryParam(param);
+			if (val && !getCookie('hub_first_touch_' + param)) {
+				setCookie('hub_first_touch_' + param, val, 30);
+			}
+		});
 		paramsList.forEach(function(param) {
 			var val = getQueryParam(param);
 			if (val) {
@@ -75,10 +89,10 @@
 			setCookie('hub_session_id', generateUUID(), 30);
 			setCookie('hub_first_visit_datetime', new Date().toISOString(), 30);
 			var ref = document.referrer || '';
-			setCookie('hub_external_referrer', ref, 30);
-			setCookie('hub_landing_url', window.location.href, 30);
+			setCookie('hub_external_referrer', stripClickIds(ref), 30);
+			setCookie('hub_landing_url', stripClickIds(window.location.href), 30);
 			setCookie('hub_landing_path', window.location.pathname, 30);
-			setCookie('hub_landing_query', window.location.search, 30);
+			setCookie('hub_landing_query', stripClickIds(window.location.search), 30);
 		}
 
 		processParams(operationalParams);
@@ -87,7 +101,7 @@
 		function initMarketingTracker() {
 		if (marketingInitialized) return;
 		marketingInitialized = true;
-		processParams(marketingParams);
+		processParams(marketingParams, true);
 		loadMetaPixel();
 	}
 

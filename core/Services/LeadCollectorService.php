@@ -2,6 +2,7 @@
 namespace Hub\Core\Services;
 
 use Hub\Core\Database;
+use Hub\Core\Services\Integrations\PipelineContactSync;
 use Hub\Core\Services\Integrations\VitAdsEventService;
 use Hub\Core\Tracker;
 
@@ -161,11 +162,13 @@ class LeadCollectorService {
 		);
 
 		// JS do Captador
+		$collector_js  = HUB_PATH . 'assets/js/hub-collector.js';
+		$collector_ver = HUB_VERSION . '.' . ( file_exists( $collector_js ) ? filemtime( $collector_js ) : '1' );
 		wp_enqueue_script(
 			'hub-collector-js',
 			HUB_URL . 'assets/js/hub-collector.js',
 			array(),
-			HUB_VERSION,
+			$collector_ver,
 			true
 		);
 
@@ -184,6 +187,7 @@ class LeadCollectorService {
 		// Localização dos dados para o front-end
 		$config = array(
 			'api_url'             => rest_url( 'hub/v1/collector/submit' ),
+			'redirected_url'      => rest_url( 'hub/v1/collector/redirected' ),
 			'attendant_name'      => esc_html( $settings['attendant_name'] ),
 			'attendant_role'      => esc_html( $settings['attendant_role'] ),
 			'attendant_avatar_url'=> esc_url( $avatar_url ),
@@ -224,6 +228,11 @@ class LeadCollectorService {
 			'callback'            => array( $this, 'handle_rest_submission' ),
 			'permission_callback' => '__return_true',
 		) );
+		register_rest_route( 'hub/v1', '/collector/redirected', array(
+			'methods'             => \WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'handle_rest_redirected' ),
+			'permission_callback' => '__return_true',
+		) );
 	}
 
 	/**
@@ -251,12 +260,8 @@ class LeadCollectorService {
 		$lock_key = 'hub_col_uuid_' . $submission_uuid;
 		$existing_lead_id = get_transient( $lock_key );
 		if ( $existing_lead_id ) {
-			return new \WP_REST_Response( array(
-				'success'  => true,
-				'lead_id'  => (int) $existing_lead_id,
-				'event_id' => 'LEAD-' . (int) $existing_lead_id,
-				'message'  => 'Contato já registrado anteriormente.'
-			), 200 );
+			// Mesma submissão repetida: nunca cria outro lead. Se o pipeline ainda não confirmou, tenta confirmar de novo.
+			return $this->finish_submission( (int) $existing_lead_id, $submission_uuid, $request, (bool) get_transient( 'hub_col_new_' . $submission_uuid ), true );
 		}
 
 		// 4. Extração e mapeamento dos dados
@@ -366,35 +371,164 @@ class LeadCollectorService {
 		global $wpdb;
 		$wpdb->suppress_errors( true );
 
-		$table_leads = Database::table( 'leads' );
-		$inserted    = Database::db()->insert( $table_leads, $lead_data );
+		// 6. Contato já existente (mesmo telefone normalizado)? Reaproveita sem criar outro lead nem mudar a etapa.
+		$match   = $this->find_existing_lead( $phone );
+		$is_new  = true;
+		$lead_id = 0;
+		if ( 'single' === $match['status'] ) {
+			$is_new  = false;
+			$lead_id = (int) $match['id'];
+			$this->complement_existing_lead( $lead_id, $lead_data, $notes );
+		} else {
+			$table_leads = Database::table( 'leads' );
+			$inserted    = Database::db()->insert( $table_leads, $lead_data );
 
-		if ( ! $inserted ) {
-			$db_error = Database::db()->last_error ?: 'Falha desconhecida no banco de dados.';
-			return new \WP_REST_Response( array( 'success' => false, 'message' => 'Erro ao salvar no sistema: ' . $db_error ), 500 );
+			if ( ! $inserted ) {
+				$db_error = Database::db()->last_error ?: 'Falha desconhecida no banco de dados.';
+				return new \WP_REST_Response( array( 'success' => false, 'message' => 'Erro ao salvar no sistema: ' . $db_error ), 500 );
+			}
+			$lead_id = (int) Database::db()->insert_id;
+			Database::log_history( 'lead', $lead_id, 'created', 'ambiguous' === $match['status']
+				? 'Lead capturado pelo Atendente Virtual. Telefone igual ao de mais de um contato: não foi mesclado, revise manualmente.'
+				: 'Lead capturado automaticamente pelo Atendente Virtual do site.' );
 		}
 
-		$lead_id = Database::db()->insert_id;
-
-		// 6. Grava lock de idempotência (1 hora)
+		// 7. Grava lock de idempotência (1 hora). O lead fica salvo mesmo que o pipeline falhe; a repetição só reconfirma.
 		set_transient( $lock_key, $lead_id, HOUR_IN_SECONDS );
+		set_transient( 'hub_col_new_' . $submission_uuid, $is_new ? 1 : 0, HOUR_IN_SECONDS );
+		set_transient( 'hub_col_ctx_' . $submission_uuid, array(
+			'attribution' => AttendantIntake::attribution( $this->vitads_lead_context( $request, $lead_data, $tracking_data ) + array( 'fbclid' => (string) ( $tracking_data['fbclid'] ?? '' ) ) ),
+			'consent'     => (string) $lead_data['ad_user_data_consent'],
+			'context'     => $this->vitads_lead_context( $request, $lead_data, $tracking_data ),
+			// Só o necessário para o aviso à equipe na repetição; IP, user agent e demais campos técnicos não ficam aqui.
+			'lead_data'   => array_intersect_key( $lead_data, array_flip( array( 'name', 'email', 'phone', 'notes' ) ) ),
+			'extra'       => $extra_data,
+		), HOUR_IN_SECONDS );
 
-		// 7. Registra no histórico do CRM
-		Database::log_history( 'lead', $lead_id, 'created', 'Lead capturado automaticamente pelo Captador de Leads do site.' );
+		return $this->finish_submission( $lead_id, $submission_uuid, $request, $is_new, false );
+	}
 
-		VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $lead_data, $tracking_data ) );
+	/**
+	 * Confirma o registro no pipeline e só então libera o WhatsApp. Falha => 503 com nova tentativa segura
+	 * (a mesma submissão reaproveita o lead já salvo e a mesma chave de idempotência no VitAds).
+	 */
+	private function finish_submission( $lead_id, $submission_uuid, \WP_REST_Request $request, $is_new, $is_retry ) {
+		$ctx = get_transient( 'hub_col_ctx_' . $submission_uuid );
+		if ( ! is_array( $ctx ) ) {
+			$ctx = array( 'attribution' => array(), 'consent' => 'unknown', 'context' => array(), 'lead_data' => array(), 'extra' => array() );
+		}
 
-		do_action( 'hub/lead_created', $lead_id );
+		$confirmed = get_transient( 'hub_col_ok_' . $submission_uuid );
+		if ( ! is_array( $confirmed ) ) {
+			$interaction = AttendantIntake::interaction( $submission_uuid, $ctx['attribution'], $ctx['consent'], gmdate( 'Y-m-d\TH:i:s\Z' ) );
+			$sync        = PipelineContactSync::confirm_attendant_lead( $lead_id, $interaction, $is_new );
+			if ( 'unavailable' === $sync['status'] ) {
+				return new \WP_REST_Response( array(
+					'success'              => false,
+					'retry'                => true,
+					'attendance_completed' => true,
+					'pipeline'             => 'unavailable',
+					'conversation_started' => false,
+					'message'              => 'Recebemos suas respostas, mas não conseguimos concluir o registro agora. Toque em “Tentar novamente” para continuar com segurança, sem duplicar seu atendimento.',
+				), 503 );
+			}
+			$confirmed = array( 'status' => $sync['status'], 'existing' => ! empty( $sync['existing'] ), 'created' => ! empty( $sync['created'] ) );
+			set_transient( 'hub_col_ok_' . $submission_uuid, $confirmed, HOUR_IN_SECONDS );
 
-		// 9. Disparo não-bloqueante de e-mail de notificação para a equipe
-		self::send_team_notification( $lead_id, $lead_data, $extra_data );
+			// Efeitos que só valem uma vez, depois da confirmação. FORM_SUBMIT é idempotente por lead (event_id).
+			if ( $is_new ) {
+				VitAdsEventService::send_form_submit( $lead_id, $ctx['context'] );
+				do_action( 'hub/lead_created', $lead_id );
+			}
+			self::send_team_notification( $lead_id, $ctx['lead_data'], $ctx['extra'] );
+		}
 
-		return new \WP_REST_Response( array(
-			'success'  => true,
-			'lead_id'  => $lead_id,
-			'event_id' => 'LEAD-' . $lead_id,
-			'message'  => 'Informações recebidas com sucesso!',
+		$lead = Database::db()->get_row( Database::db()->prepare( 'SELECT name FROM ' . Database::table( 'leads' ) . ' WHERE id = %d', (int) $lead_id ) );
+		$name = $lead ? (string) $lead->name : '';
+		$forms = ( get_option( 'hub_settings', array() )['forms'] ?? array() );
+		$ref   = AttendantIntake::reference( $lead_id );
+		$wa    = AttendantIntake::whatsapp_url(
+			isset( $forms['whatsapp'] ) ? $forms['whatsapp'] : '',
+			AttendantIntake::whatsapp_message( isset( $forms['whatsapp_msg'] ) ? $forms['whatsapp_msg'] : '', 'Interessado do Site' === $name ? '' : $name, $ref )
+		);
+
+		return new \WP_REST_Response( array_merge(
+			AttendantIntake::stages( $confirmed['status'], $wa ),
+			array(
+				'success'          => true,
+				'lead_id'          => (int) $lead_id,
+				'event_id'         => 'LEAD-' . (int) $lead_id,
+				'contact_existing' => ! $is_new || ! empty( $confirmed['existing'] ),
+				'reference'        => $ref,
+				'whatsapp_url'     => $wa,
+				'message'          => $is_retry && ! $is_new ? 'Contato já registrado anteriormente.' : 'Informações recebidas com sucesso!',
+			)
 		), 200 );
+	}
+
+	/**
+	 * Candidato único com o mesmo telefone normalizado (comparação em PHP com a regra BR de 55 + DDD).
+	 *
+	 * @return array{status:string,id:int}
+	 */
+	private function find_existing_lead( $phone ) {
+		$normalized = AttendantIntake::normalize_phone( $phone );
+		if ( '' === $normalized ) {
+			return array( 'status' => 'none', 'id' => 0 );
+		}
+		$db       = Database::db();
+		$table    = Database::table( 'leads' );
+		$stripped = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'(',''),')',''),'+',''),'.','')";
+		$rows     = $db->get_results( $db->prepare( "SELECT id, phone FROM {$table} WHERE phone <> '' AND RIGHT({$stripped}, 8) = %s ORDER BY id ASC LIMIT 50", substr( $normalized, -8 ) ) );
+		$cands    = array();
+		foreach ( (array) $rows as $row ) {
+			$cands[] = array( 'id' => (int) $row->id, 'phone' => (string) $row->phone );
+		}
+		return AttendantIntake::pick_existing( $cands, $normalized );
+	}
+
+	/**
+	 * Complementa só o que está vazio no lead existente; etapa, origem e atribuição anteriores são preservadas.
+	 *
+	 * @param array<string,mixed> $lead_data
+	 */
+	private function complement_existing_lead( $lead_id, array $lead_data, $notes ) {
+		$db    = Database::db();
+		$table = Database::table( 'leads' );
+		$row   = $db->get_row( $db->prepare( "SELECT * FROM {$table} WHERE id = %d", (int) $lead_id ), ARRAY_A );
+		if ( ! $row ) {
+			return;
+		}
+		$fill = array();
+		if ( '' === trim( (string) ( $row['name'] ?? '' ) ) || 'Interessado do Site' === $row['name'] ) {
+			if ( 'Interessado do Site' !== $lead_data['name'] ) {
+				$fill['name'] = $lead_data['name'];
+			}
+		}
+		foreach ( array( 'email', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', '_fbp', '_fbc' ) as $field ) {
+			if ( '' === trim( (string) ( $row[ $field ] ?? '' ) ) && '' !== trim( (string) ( $lead_data[ $field ] ?? '' ) ) ) {
+				$fill[ $field ] = $lead_data[ $field ];
+			}
+		}
+		if ( $fill ) {
+			$fill['updated_at'] = current_time( 'mysql' );
+			$db->update( $table, $fill, array( 'id' => (int) $lead_id ) );
+		}
+		$detail = '' !== trim( (string) $notes ) ? ' Necessidade informada: ' . mb_substr( (string) $notes, 0, 300 ) : '';
+		Database::log_history( 'lead', (int) $lead_id, 'interaction', 'Nova interação pelo Atendente Virtual do site (contato já existente; etapa preservada).' . $detail );
+	}
+
+	/**
+	 * Registra no histórico que o visitante foi levado ao WhatsApp. Não prova que a mensagem foi enviada.
+	 */
+	public function handle_rest_redirected( \WP_REST_Request $request ) {
+		$uuid    = sanitize_key( $request->get_param( 'submission_uuid' ) );
+		$lead_id = '' !== $uuid ? (int) get_transient( 'hub_col_uuid_' . $uuid ) : 0;
+		if ( $lead_id > 0 && ! get_transient( 'hub_col_redir_' . $uuid ) ) {
+			set_transient( 'hub_col_redir_' . $uuid, 1, HOUR_IN_SECONDS );
+			Database::log_history( 'lead', $lead_id, 'whatsapp_redirect', 'Visitante encaminhado ao WhatsApp pelo Atendente Virtual. Isto não confirma que a mensagem foi enviada.' );
+		}
+		return new \WP_REST_Response( array( 'success' => true, 'conversation_started' => false ), 200 );
 	}
 
 	/**
@@ -431,6 +565,7 @@ class LeadCollectorService {
 			'gbraid'           => $pick( 'gbraid' ),
 			'fbp'              => isset( $tracking_data['_fbp'] ) ? (string) $tracking_data['_fbp'] : '',
 			'fbc'              => isset( $tracking_data['_fbc'] ) ? (string) $tracking_data['_fbc'] : '',
+			'ad_user_data_consent' => $lead_data['ad_user_data_consent'] ?? 'unknown',
 		);
 	}
 

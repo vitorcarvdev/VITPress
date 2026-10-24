@@ -46,6 +46,17 @@ class VitAdsEventService {
 		return substr( (string) $digits, 0, 20 );
 	}
 
+	/**
+	 * Só granted/denied explícitos; ausente ou fora do vocabulário vira unknown.
+	 */
+	public static function normalize_consent( $value ) {
+		if ( ! is_string( $value ) ) {
+			return 'unknown';
+		}
+		$status = strtolower( trim( $value ) );
+		return in_array( $status, array( 'granted', 'denied' ), true ) ? $status : 'unknown';
+	}
+
 	public static function token_hint( $token ) {
 		$token = (string) $token;
 		if ( '' === $token ) {
@@ -93,6 +104,7 @@ class VitAdsEventService {
 			'event_type'  => 'FORM_SUBMIT',
 			'routing_key' => $config['routing_key'],
 			'occurred_at' => gmdate( 'c' ),
+			'ad_user_data_consent' => self::normalize_consent( $lead['ad_user_data_consent'] ?? null ),
 		);
 
 		$source_url = isset( $lead['event_source_url'] ) ? esc_url_raw( (string) $lead['event_source_url'] ) : '';

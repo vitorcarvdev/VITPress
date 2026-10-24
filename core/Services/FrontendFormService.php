@@ -329,6 +329,7 @@ class FrontendFormService {
 		if ( $inserted ) {
 			$lead_id = Database::db()->insert_id;
 			Database::log_history( 'lead', $lead_id, 'created', 'Lead capturado automaticamente pelo formulário do site.' );
+			\Hub\Core\Services\Integrations\PipelineContactSync::register_lead( $lead_id );
 			error_log( '[HUB FORM] persistence_ok' );
 			
 			// Dispara evento de conversão. Falha de integração não pode derrubar a resposta do visitante.
@@ -391,7 +392,7 @@ class FrontendFormService {
 			
 			$redirect_url = home_url( '/obrigado-contato?hub_token=' . $token );
 
-			VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data ) );
+			VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data, $data['ad_user_data_consent'] ) );
 
 			return new \WP_REST_Response( array( 
 				'success' => true, 
@@ -415,7 +416,7 @@ class FrontendFormService {
 	 * @param array<string,mixed> $tracking_data
 	 * @return array<string,mixed>
 	 */
-	private function vitads_lead_context( \WP_REST_Request $request, $name, $email, $phone, array $tracking_data ) {
+	private function vitads_lead_context( \WP_REST_Request $request, $name, $email, $phone, array $tracking_data, $consent = 'unknown' ) {
 		$pick = function ( $key ) use ( $tracking_data ) {
 			$current = isset( $tracking_data[ $key ] ) ? trim( (string) $tracking_data[ $key ] ) : '';
 			if ( '' !== $current ) {
@@ -440,6 +441,7 @@ class FrontendFormService {
 			'gbraid'           => $pick( 'gbraid' ),
 			'fbp'              => isset( $tracking_data['_fbp'] ) ? (string) $tracking_data['_fbp'] : '',
 			'fbc'              => isset( $tracking_data['_fbc'] ) ? (string) $tracking_data['_fbc'] : '',
+			'ad_user_data_consent' => $consent,
 		);
 	}
 

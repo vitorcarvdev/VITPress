@@ -181,17 +181,18 @@ class PipelineModule extends AbstractModule {
 	 *
 	 * @param int         $lead_id
 	 * @param string      $stage
-	 * @param string      $source vitpress_admin|vitpress_mobile|form
+	 * @param string      $source vitpress_admin|vitpress_mobile|form|vitads_sync
 	 * @param string|null $previous_raw Etapa lida antes de outro UPDATE.
+	 * @param string|null $synced_at Horário autoritativo quando a origem é vitads_sync.
 	 * @return array|\WP_Error
 	 */
-	public static function change_stage( $lead_id, $stage, $source, $previous_raw = null ) {
+	public static function change_stage( $lead_id, $stage, $source, $previous_raw = null, $synced_at = null ) {
 		global $wpdb;
 
 		$lead_id = (int) $lead_id;
 		$stage   = sanitize_key( $stage );
 		$source  = sanitize_key( $source );
-		$allowed_sources = array( 'vitpress_admin', 'vitpress_mobile', 'form' );
+		$allowed_sources = array( 'vitpress_admin', 'vitpress_mobile', 'form', 'vitads_sync' );
 
 		if ( $lead_id <= 0 ) {
 			return new \WP_Error( 'invalid_lead', 'ID inválido.', array( 'status' => 400 ) );
@@ -221,7 +222,7 @@ class PipelineModule extends AbstractModule {
 			);
 		}
 
-		$now     = current_time( 'mysql' );
+		$now = ( 'vitads_sync' === $source && is_string( $synced_at ) && preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $synced_at ) ) ? $synced_at : current_time( 'mysql' );
 		$updated = $wpdb->update(
 			$table,
 			array(
@@ -236,6 +237,10 @@ class PipelineModule extends AbstractModule {
 
 		if ( false === $updated ) {
 			return new \WP_Error( 'db_error', 'Não foi possível salvar a etapa.', array( 'status' => 500 ) );
+		}
+
+		if ( in_array( $source, array( 'vitpress_admin', 'vitpress_mobile' ), true ) ) {
+			\Hub\Core\Services\Integrations\PipelineContactSync::push_after_human( $lead_id );
 		}
 
 		return array(
@@ -467,6 +472,7 @@ class PipelineModule extends AbstractModule {
 	}
 
 	public function render() {
+		\Hub\Core\Services\Integrations\PipelineContactSync::pull_board();
 		$stages      = self::get_canonical_stages();
 		$table_leads = Database::table( 'leads' );
 		$db          = Database::db();

@@ -225,6 +225,7 @@ class FormService {
 		$lead_id = Database::db()->insert_id;
 
 		if ( $lead_id ) {
+			\Hub\Core\Services\Integrations\PipelineContactSync::register_lead( $lead_id );
 			Database::log_history( 'lead', $lead_id, 'create', 'Lead capturado pelo formulÃ¡rio do site.' );
 			
 			// Dispara evento de conversÃ£o

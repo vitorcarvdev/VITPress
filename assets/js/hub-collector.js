@@ -333,6 +333,9 @@
 		footer.innerHTML =
 			'<div class="hub-collector-completed-box">' +
 			'  <div>✓ Atendimento concluído! Nossa equipe entrará em contato em breve.</div>' +
+			(session.whatsappUrl
+				? '  <button type="button" class="hub-collector-btn-whatsapp" style="margin-top:6px;background:var(--hub-col-primary);border:0;color:#ffffff;padding:6px 14px;border-radius:12px;font-size:12px;cursor:pointer;font-weight:600;">Continuar no WhatsApp</button>'
+				: '') +
 			'  <button type="button" class="hub-collector-btn-restart" style="margin-top:6px;background:#ffffff;border:1px solid var(--hub-col-primary);color:var(--hub-col-primary);padding:4px 12px;border-radius:12px;font-size:11.5px;cursor:pointer;font-weight:600;">Iniciar Novo Atendimento</button>' +
 			'</div>';
 
@@ -392,6 +395,15 @@
 	}
 
 	// --- Envio Final para REST API ---
+	// A URL vai para o lead e o VitAds; identificadores de clique só seguem pelos cookies com consentimento.
+	function pageUrlWithoutClickIds() {
+		var url = window.location.origin + window.location.pathname;
+		var kept = window.location.search.replace(/^\?/, '').split('&').filter(function(pair) {
+			return pair !== '' && ['gclid', 'gbraid', 'wbraid', 'fbclid'].indexOf(pair.split('=')[0].toLowerCase()) === -1;
+		});
+		return url + (kept.length ? '?' + kept.join('&') : '');
+	}
+
 	function submitLead() {
 		var typing = document.createElement('div');
 		typing.className = 'hub-collector-typing';
@@ -403,52 +415,113 @@
 			submission_uuid: session.uuid,
 			time_spent: Math.max(1, Math.floor((Date.now() - session.startedAt) / 1000)),
 			answers: session.answers,
-			conversion_page: window.location.href,
+			conversion_page: pageUrlWithoutClickIds(),
 			hub_collector_hp: '',
-			ad_user_data_consent: window.HubConsent ? (window.HubConsent.status || 'unknown') : 'granted',
+			ad_user_data_consent: window.HubConsent && typeof window.HubConsent.getStatus === 'function' ? window.HubConsent.getStatus() : 'unknown',
 		};
 
+		footer.innerHTML = '';
+
+		// A mesma session.uuid vai em toda tentativa: o servidor e o VitAds tratam a repetição como a mesma submissão.
 		fetch(config.api_url, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(payload),
 		})
 			.then(function (res) {
-				return res.json();
+				return res.json().then(function (data) {
+					return { ok: res.ok, data: data || {} };
+				}, function () {
+					return { ok: false, data: {} };
+				});
 			})
-			.then(function (data) {
+			.then(function (result) {
 				if (typing.parentNode) {
 					typing.parentNode.removeChild(typing);
+				}
+				var data = result.data;
+
+				// Falha de registro: nada de falso sucesso nem redirecionamento. O visitante pode tentar de novo.
+				if (!result.ok || !data.success) {
+					showSubmitFailure(data.message);
+					return;
 				}
 
 				session.completed = true;
 				session.leadId = data.lead_id || null;
+				session.whatsappUrl = data.redirect_allowed && data.whatsapp_url ? data.whatsapp_url : '';
 				saveSession(session);
 
 				if (badgeTimer) clearTimeout(badgeTimer);
 				if (autoOpenTimer) clearTimeout(autoOpenTimer);
 
-				// Dispara Meta Pixel no navegador se disponível
-				if (typeof window.fbq === 'function' && data.event_id) {
-					window.fbq('track', 'Lead', {}, { eventID: data.event_id });
-				}
-				// Dispara Google Ads / GA4 gtag se disponível
-				if (typeof window.gtag === 'function') {
-					window.gtag('event', 'generate_lead', { value: 0, currency: 'BRL' });
+				// Lead novo conta como conversão no navegador; contato que já existia (nova interação) não conta de novo.
+				if (!data.contact_existing) {
+					if (typeof window.fbq === 'function' && data.event_id) {
+						window.fbq('track', 'Lead', {}, { eventID: data.event_id });
+					}
+					if (typeof window.gtag === 'function') {
+						window.gtag('event', 'generate_lead', { value: 0, currency: 'BRL' });
+					}
 				}
 
 				appendBotMessage(config.final_message || 'Muito obrigado! Recebemos suas informações.', function () {
 					renderCompletedFooter();
+					if (session.whatsappUrl) {
+						scheduleWhatsAppRedirect(session.whatsappUrl);
+					}
 				});
 			})
-			.catch(function (err) {
+			.catch(function () {
 				if (typing.parentNode) {
 					typing.parentNode.removeChild(typing);
 				}
-				appendBotMessage('Recebemos seus dados e entraremos em contato em breve. Obrigado!', function () {
-					renderCompletedFooter();
-				});
+				showSubmitFailure();
 			});
+	}
+
+	function showSubmitFailure(message) {
+		appendBotMessage(
+			message || 'Não conseguimos concluir o registro agora. Suas respostas estão guardadas neste chat; toque em “Tentar novamente”.',
+			function () {
+				footer.innerHTML =
+					'<div class="hub-collector-completed-box">' +
+					'  <button type="button" class="hub-collector-btn-retry" style="background:var(--hub-col-primary);border:0;color:#ffffff;padding:6px 14px;border-radius:12px;font-size:12px;cursor:pointer;font-weight:600;">Tentar novamente</button>' +
+					'</div>';
+				var retryBtn = footer.querySelector('.hub-collector-btn-retry');
+				if (retryBtn) {
+					retryBtn.addEventListener('click', function () {
+						submitLead();
+					});
+				}
+			}
+		);
+	}
+
+	// O redirecionamento só é oferecido depois que o registro foi confirmado. Ele NÃO prova que a mensagem foi enviada.
+	function goToWhatsApp(url) {
+		try {
+			if (config.redirected_url && navigator.sendBeacon) {
+				navigator.sendBeacon(config.redirected_url, new Blob([JSON.stringify({ submission_uuid: session.uuid })], { type: 'application/json' }));
+			}
+		} catch (e) {}
+		window.location.href = url;
+	}
+
+	function scheduleWhatsAppRedirect(url) {
+		var btn = footer.querySelector('.hub-collector-btn-whatsapp');
+		if (btn) {
+			btn.addEventListener('click', function () {
+				goToWhatsApp(url);
+			});
+		}
+		setTimeout(function () {
+			if (session.completed && !session.redirected) {
+				session.redirected = true;
+				saveSession(session);
+				goToWhatsApp(url);
+			}
+		}, 3000);
 	}
 
 	// --- Variáveis de Timer ---

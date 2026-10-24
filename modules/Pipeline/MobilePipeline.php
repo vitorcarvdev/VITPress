@@ -141,6 +141,7 @@ class MobilePipeline {
 		header( 'X-Robots-Tag: noindex, nofollow' );
 		header( 'Cache-Control: private, no-store' );
 
+		\Hub\Core\Services\Integrations\PipelineContactSync::pull_board();
 		$stages = PipelineModule::get_stage_definitions();
 		$cards  = self::load_cards();
 		$nonce  = wp_create_nonce( 'wp_rest' );
