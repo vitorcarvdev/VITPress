@@ -3,7 +3,7 @@
  * admin/views/tools-emails.php
  * Aba de E-mails na tela de Ferramentas.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -26,7 +26,7 @@ $from_name  = isset( $ses['from_name'] ) ? $ses['from_name'] : get_bloginfo( 'na
 <div class="card" style="max-width: 800px; padding: 20px;">
 	<h2>Configuração Amazon SES</h2>
 	<p class="description">
-		Configure as credenciais SMTP do Amazon SES. Quando ativado, todos os e-mails enviados pelo Hub (e pelo WordPress) utilizarão esta conexão de forma nativa.
+		Configure as credenciais SMTP do Amazon SES. Quando ativado, todos os e-mails enviados pelo VitPress (e pelo WordPress) utilizarão esta conexão de forma nativa.
 	</p>
 
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -77,7 +77,7 @@ $from_name  = isset( $ses['from_name'] ) ? $ses['from_name'] : get_bloginfo( 'na
 				<th scope="row"><label for="ses_password">Secret Access Key (ou Senha SMTP)</label></th>
 				<td>
 					<input name="ses[password]" type="password" id="ses_password" value="<?php echo esc_attr( $password ); ?>" class="regular-text" placeholder="Ex: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
-					<p class="description">Você pode colar diretamente seu IAM Secret Access Key. O Hub fará a conversão automática para Senha SMTP em background.</p>
+					<p class="description">Você pode colar diretamente seu IAM Secret Access Key. O VitPress fará a conversão automática para Senha SMTP em background.</p>
 				</td>
 			</tr>
 			<tr>

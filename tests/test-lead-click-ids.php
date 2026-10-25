@@ -38,6 +38,9 @@ register_shutdown_function(
 
 remove_all_actions( 'hub/lead_created' );
 add_filter( 'pre_wp_mail', '__return_true' );
+// O formulário independente está bloqueado por padrão (captação é do Atendente); este teste exercita o caminho legado
+// do formulário, então reabre a captação de forma explícita, só neste processo de teste.
+add_filter( 'hub/allow_standalone_lead_forms', '__return_true' );
 
 $settings = get_option( 'hub_settings', array() );
 $vitads_backup = isset( $settings['vitads'] ) ? $settings['vitads'] : null;

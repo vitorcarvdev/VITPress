@@ -3,7 +3,7 @@
  * admin/views/tools-logs.php
  * Aba de Logs na tela de Ferramentas.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

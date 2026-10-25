@@ -3,7 +3,7 @@
  * admin/views/tools-captador.php
  * Aba de Configuração do Captador de Leads Conversacional.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

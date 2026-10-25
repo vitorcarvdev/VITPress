@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Módulo de Pipeline Comercial (Exclusivamente Visualização / Read-Only).
  *
- * O Hub apenas exibe o Pipeline, cartões e métricas.
+ * O VitPress apenas exibe o Pipeline, cartões e métricas.
  * Operações comerciais e movimentações são realizadas exclusivamente no VitZap.
  */
 class PipelineModule extends AbstractModule {

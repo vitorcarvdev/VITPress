@@ -190,7 +190,7 @@ class BackupArchiveValidator {
 		}
 		foreach ( self::LEGACY_FORBIDDEN_ROOTS as $forbidden ) {
 			if ( isset( $roots[ $forbidden ] ) ) {
-				return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem do Hub VitAgência.';
+				return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de versões anteriores (Hub VitAgência, nome anterior do VitPress).';
 			}
 		}
 		foreach ( self::LEGACY_CONTENT_MARKERS as $marker ) {
@@ -198,6 +198,6 @@ class BackupArchiveValidator {
 				return '';
 			}
 		}
-		return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem do Hub VitAgência.';
+		return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de versões anteriores (Hub VitAgência, nome anterior do VitPress).';
 	}
 }

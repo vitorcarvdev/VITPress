@@ -115,7 +115,7 @@ class Connect {
 		}
 
 		$res                = new \stdClass();
-		$res->name          = 'Hub - Gestão Inteligente';
+		$res->name          = 'VitPress - Gestão Inteligente';
 		$res->slug          = 'hub';
 		$res->version       = $remote_info->new_version;
 		$res->author        = '<a href="https://vcsis.com.br">VCSIS Agência</a>';

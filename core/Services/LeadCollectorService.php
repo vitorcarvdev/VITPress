@@ -437,7 +437,12 @@ class LeadCollectorService {
 
 			// Efeitos que só valem uma vez, depois da confirmação. FORM_SUBMIT é idempotente por lead (event_id).
 			if ( $is_new ) {
-				VitAdsEventService::send_form_submit( $lead_id, $ctx['context'] );
+				// O contexto guardado é anterior à confirmação: acrescenta o vínculo que o VitAds acabou de devolver.
+				$event_context = is_array( $ctx['context'] ) ? $ctx['context'] : array();
+				if ( ! empty( $sync['shared_contact_id'] ) ) {
+					$event_context['shared_contact_id'] = $sync['shared_contact_id'];
+				}
+				VitAdsEventService::send_form_submit( $lead_id, $event_context );
 				do_action( 'hub/lead_created', $lead_id );
 			}
 			self::send_team_notification( $lead_id, $ctx['lead_data'], $ctx['extra'] );

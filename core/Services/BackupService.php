@@ -132,11 +132,11 @@ class BackupService {
 	public function add_cron_intervals( $schedules ) {
 		$schedules['hub_five_minutes'] = array(
 			'interval' => 300,
-			'display'  => 'A cada 5 minutos (Hub)',
+			'display'  => 'A cada 5 minutos (VitPress)',
 		);
 		$schedules['hub_weekly'] = array(
 			'interval' => 604800,
-			'display'  => 'Semanalmente (Hub)',
+			'display'  => 'Semanalmente (VitPress)',
 		);
 		return $schedules;
 	}
@@ -255,7 +255,7 @@ class BackupService {
 		$tmp_file = wp_tempnam( 'hub_db_dump' );
 		$handle   = fopen( $tmp_file, 'w' );
 		
-		fwrite( $handle, "-- Hub Database Backup (Raw SQL)\n" );
+		fwrite( $handle, "-- VitPress Database Backup (Raw SQL)\n" );
 		fwrite( $handle, "-- Gerado em: " . current_time( 'mysql' ) . "\n" );
 		fwrite( $handle, '-- sql_escaping: ' . BackupSql::ESCAPING_MARKER . "\n\n" );
 
@@ -913,7 +913,7 @@ class BackupService {
 			$check = BackupArchiveValidator::validate( $filepath, false === $free ? null : (float) $free );
 			if ( ! $check['ok'] ) { @ob_end_clean(); wp_send_json_error( $check['error'] ); }
 			if ( BackupArchiveValidator::FORMAT_LEGACY_CONTENT === $check['format'] && empty( $_POST['confirm_files_only'] ) ) {
-				@ob_end_clean(); wp_send_json_error( 'Este backup antigo do Hub VitAgência contém apenas arquivos. Confirme a restauração somente dos arquivos para continuar.' );
+				@ob_end_clean(); wp_send_json_error( 'Este backup antigo do Hub VitAgência (nome anterior do VitPress) contém apenas arquivos. Confirme a restauração somente dos arquivos para continuar.' );
 			}
 
 			$started = RestoreRunner::start(

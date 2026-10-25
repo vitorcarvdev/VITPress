@@ -65,7 +65,7 @@ class OtherBusinessProfile extends AbstractProfile {
 	}
 
 	public function get_custom_fields( $entity = 'client' ) {
-		// Sem campos extras nativos para "Outros", usa apenas a estrutura base do Hub
+		// Sem campos extras nativos para "Outros", usa apenas a estrutura base do VitPress
 		return array();
 	}
 }

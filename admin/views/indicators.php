@@ -82,7 +82,7 @@ $period = isset( $_GET['period'] ) ? sanitize_key( $_GET['period'] ) : '30_days'
 					
 					if ( $cohort_sem_atendimento > 0 ) {
 						$has_warning = true;
-						echo '<p style="margin: 0 0 8px;"><strong>Métrica de Cobertura:</strong> Neste período, ' . esc_html( $cohort_sem_atendimento ) . ' de ' . esc_html( $cohort_total ) . ' leads não possuem nenhuma tentativa de contato registrada no Hub. Antes de avaliar a qualidade dos leads recebidos, recomendamos que todas as oportunidades tenham ao menos uma tentativa de atendimento registrada.</p>';
+						echo '<p style="margin: 0 0 8px;"><strong>Métrica de Cobertura:</strong> Neste período, ' . esc_html( $cohort_sem_atendimento ) . ' de ' . esc_html( $cohort_total ) . ' leads não possuem nenhuma tentativa de contato registrada no VitPress. Antes de avaliar a qualidade dos leads recebidos, recomendamos que todas as oportunidades tenham ao menos uma tentativa de atendimento registrada.</p>';
 					}
 					
 					if ( ! $has_warning ) {
@@ -327,7 +327,7 @@ $period = isset( $_GET['period'] ) ? sanitize_key( $_GET['period'] ) : '30_days'
 							<td style="padding: 5px 8px; text-align: right; font-weight: 600; white-space: nowrap;"><?php echo esc_html( $faixas['muito_demorado'] ); ?></td>
 						</tr>
 						<tr style="background-color: #fcf0f1;">
-							<td style="padding: 5px 8px;"><span style="color:#d63638; font-weight:600;">Sem tentativa registrada no Hub</span></td>
+							<td style="padding: 5px 8px;"><span style="color:#d63638; font-weight:600;">Sem tentativa registrada no VitPress</span></td>
 							<td style="padding: 5px 8px; text-align: right; font-weight: 600; white-space: nowrap;"><span style="color:#d63638;"><?php echo esc_html( $cohort_sem_atendimento ); ?></span></td>
 						</tr>
 						<tr>

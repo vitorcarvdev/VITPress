@@ -11,11 +11,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Conector Oficial do Hub VitAgência com o Pipeline Central VCSis
+ * Conector Oficial do VitPress (antigo Hub VitAgência) com o Pipeline Central VCSis
  * 
  * Responsabilidades:
- * 1. Escutar a criação de novos leads no Hub (hook `hub/lead_created`).
- * 2. Mapear e traduzir os dados reais de contato e tráfego do Hub para o contrato genérico de ingestão.
+ * 1. Escutar a criação de novos leads no VitPress (hook `hub/lead_created`).
+ * 2. Mapear e traduzir os dados reais de contato e tráfego do VitPress para o contrato genérico de ingestão.
  * 3. Garantir idempotência com chave baseada na submissão real (`hub_lead:{tenant}:{lead_id}`).
  * 4. Isolar falhas: se o Pipeline Central falhar, a submissão do formulário conclui 100% com sucesso para o visitante.
  * 5. Permitir retentativas manuais ou automáticas via `retry_lead()`.
@@ -36,7 +36,7 @@ class HubPipelineConnector {
     }
 
     /**
-     * Listener disparado quando um novo lead é salvo no Hub
+     * Listener disparado quando um novo lead é salvo no VitPress
      *
      * @param int $lead_id ID do registro em wp_hub_leads
      * @return array Resultado da sincronização
@@ -48,7 +48,7 @@ class HubPipelineConnector {
             return [ 'success' => false, 'error_code' => 'invalid_lead_id', 'message' => 'ID do lead inválido.' ];
         }
 
-        // 1. Busca os dados completos do lead gravados no Hub
+        // 1. Busca os dados completos do lead gravados no VitPress
         $table_leads = Database::table( 'leads' );
         $lead = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table_leads} WHERE id = %d LIMIT 1", $lead_id ), ARRAY_A );
 

@@ -3,7 +3,7 @@
  * admin/views/tools.php
  * Tela principal de Ferramentas com abas.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

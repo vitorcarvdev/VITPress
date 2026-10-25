@@ -81,7 +81,7 @@ class Admin {
 			$main_slug = $module_manager->is_active('indicators') ? 'hub-indicadores' : 'hub-support';
 		}
 
-		// Menu Principal: Hub
+		// Menu Principal: VitPress
 		add_menu_page(
 			'VitPress',
 			'VitPress',
@@ -250,7 +250,7 @@ class Admin {
 	}
 
 	/**
-	 * Enfileira os estilos e scripts nativos nas páginas do Hub.
+	 * Enfileira os estilos e scripts nativos nas páginas do VitPress.
 	 *
 	 * @param string $hook
 	 */
@@ -290,7 +290,7 @@ class Admin {
 	}
 
 	/**
-	 * Renderiza a assinatura no rodapé apenas nas páginas do Hub.
+	 * Renderiza a assinatura no rodapé apenas nas páginas do VitPress.
 	 */
 	public function render_admin_footer( $text ) {
 		$screen = get_current_screen();

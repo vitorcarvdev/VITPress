@@ -3,7 +3,7 @@
  * admin/views/pipeline.php
  * Visualização do Pipeline Comercial (Kanban Read-Only).
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

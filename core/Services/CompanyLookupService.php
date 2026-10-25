@@ -62,7 +62,7 @@ class CompanyLookupService {
 			return new \WP_Error( 'invalid_json', 'Resposta inválida da API.' );
 		}
 
-		// Mapeia o retorno para os campos do Hub
+		// Mapeia o retorno para os campos do VitPress
 		return array(
 			'name'         => isset( $json['razao_social'] ) ? $json['razao_social'] : '',
 			'zipcode'      => isset( $json['cep'] ) ? $json['cep'] : '',

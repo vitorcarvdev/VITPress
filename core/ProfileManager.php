@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Gerenciador dos Perfis de Segmento no Hub.
+ * Gerenciador dos Perfis de Segmento no VitPress.
  */
 class ProfileManager {
 
@@ -58,7 +58,7 @@ class ProfileManager {
 	}
 
 	/**
-	 * Registra os perfis nativos do Hub.
+	 * Registra os perfis nativos do VitPress.
 	 */
 	private function register_default_profiles() {
 		$this->register_profile( new HealthProfile() );

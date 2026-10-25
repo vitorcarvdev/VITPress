@@ -184,7 +184,7 @@ $empresa_disabled_class = $is_client ? '' : 'hub-disabled-tab';
 							</tbody>
 						</table>
 					<?php else : ?>
-						<p class="description" style="margin: 0; font-style: italic;">Nenhuma tentativa de contato foi registrada para este lead no Hub.</p>
+						<p class="description" style="margin: 0; font-style: italic;">Nenhuma tentativa de contato foi registrada para este lead no VitPress.</p>
 					<?php endif; ?>
 				</div>
 <h3>Dados de Rastreamento (Google Ads / Meta Ads / UTMs)</h3>

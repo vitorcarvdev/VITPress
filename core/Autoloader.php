@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Autoloader PSR-4 para o Plugin Hub.
+ * Autoloader PSR-4 para o Plugin VitPress.
  */
 class Autoloader {
 

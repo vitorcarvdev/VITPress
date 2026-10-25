@@ -13,7 +13,7 @@ $legacy_backups = $backup_service->get_legacy_backups();
 <div class="card" style="max-width: 800px; padding: 20px;">
 	<h2>Backup e Migração</h2>
 	<p class="description">
-		O Hub não armazena backups persistentes neste servidor devido às políticas de segurança e limite de disco. 
+		O VitPress não armazena backups persistentes neste servidor devido às políticas de segurança e limite de disco. 
 		Todas as operações abaixo geram arquivos temporários que são excluídos logo após o download.
 	</p>
 
@@ -111,7 +111,7 @@ $legacy_backups = $backup_service->get_legacy_backups();
 
 	<h3>RESTAURAR / MIGRAR SITE</h3>
 	<p>Importe um <code>.zip</code> completo criado pelo VitPress (arquivos e banco de dados).</p>
-	<p class="description">Backups antigos do Hub VitAgência que contêm só a pasta <code>wp-content</code>, sem banco de dados, podem restaurar apenas os arquivos: o banco de dados atual é mantido e você confirma antes de começar. Outros formatos antigos não são compatíveis.</p>
+	<p class="description">Backups antigos do Hub VitAgência (nome anterior do VitPress) que contêm só a pasta <code>wp-content</code>, sem banco de dados, podem restaurar apenas os arquivos: o banco de dados atual é mantido e você confirma antes de começar. Outros formatos antigos não são compatíveis.</p>
 	<form id="hub-chunked-upload-form" enctype="multipart/form-data" data-chunk-size="<?php echo esc_attr( \Hub\Core\Services\BackupService::chunk_size() ); ?>">
 		<?php wp_nonce_field( 'hub_upload_backup', 'hub_nonce_upload' ); ?>
 		<input type="file" id="hubbackup_file" accept=".zip" required style="margin-bottom: 10px; display: block;">
@@ -206,7 +206,7 @@ $display_secret = !empty($s3_secret) ? str_repeat('*', 36) . substr($s3_secret, 
 <div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
 	<h2>Integração Amazon S3 (Backups Automáticos)</h2>
 	<p class="description">
-		Configure o envio automático de backups para o seu bucket no Amazon S3. Quando ativado, o Hub fará o backup do banco de dados <strong>diariamente</strong> e o backup completo <strong>semanalmente</strong>.
+		Configure o envio automático de backups para o seu bucket no Amazon S3. Quando ativado, o VitPress fará o backup do banco de dados <strong>diariamente</strong> e o backup completo <strong>semanalmente</strong>.
 	</p>
 
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -347,7 +347,7 @@ $restore_phases     = array(
 <?php elseif ( $restore_info ) : ?>
 <div class="card" id="hub-restore-panel" style="max-width: 800px; padding: 20px; margin-top: 20px; border-left: 4px solid #2271b1;">
 	<h2>Backup pronto para restauração</h2>
-	<p><?php echo $restore_files_only ? 'Backup antigo do Hub VitAgência: somente arquivos de wp-content serão restaurados. O banco de dados atual será mantido.' : 'Backup completo do VitPress (arquivos e banco de dados). Nada será alterado até você aplicar a restauração.'; ?></p>
+	<p><?php echo $restore_files_only ? 'Backup antigo do Hub VitAgência (nome anterior do VitPress): somente arquivos de wp-content serão restaurados. O banco de dados atual será mantido.' : 'Backup completo do VitPress (arquivos e banco de dados). Nada será alterado até você aplicar a restauração.'; ?></p>
 	<p><button type="button" class="button button-primary hub-restore-action" data-action="start">Iniciar restauração</button></p>
 	<p id="hub-restore-msg" style="font-weight: bold;"></p>
 </div>
@@ -361,7 +361,7 @@ jQuery(document).ready(function($) {
 	var filesOnly = <?php echo $restore_files_only ? 'true' : 'false'; ?>;
 	var panelUrl = '<?php echo esc_js( admin_url( 'admin.php?page=hub-vitagencia&tab=backup' ) ); ?>';
 	var confirms = {
-		start: filesOnly ? 'Este é um backup antigo do Hub VitAgência sem banco de dados.\n\nSerão restaurados SOMENTE os arquivos de wp-content (plugins, temas, uploads). O banco de dados atual NÃO será alterado.\n\nDeseja continuar?' : '',
+		start: filesOnly ? 'Este é um backup antigo do Hub VitAgência (nome anterior do VitPress) sem banco de dados.\n\nSerão restaurados SOMENTE os arquivos de wp-content (plugins, temas, uploads). O banco de dados atual NÃO será alterado.\n\nDeseja continuar?' : '',
 		'switch': 'Aplicar a restauração agora?\n\nArquivos e banco de dados serão trocados pelos do backup. As cópias antigas ficam guardadas até você confirmar ou reverter.',
 		revert: 'Reverter para o site anterior?',
 		discard: 'Descartar esta restauração? O site atual não será alterado.',

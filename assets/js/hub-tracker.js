@@ -1,5 +1,5 @@
 /**
- * Hub Visitor Tracking Script (Vanilla JS - Zero Dependencies)
+ * VitPress Visitor Tracking Script (Vanilla JS - Zero Dependencies)
  * Captura parÃ¢metros de UTMs, IDs de cliques, referenciador, visualizaÃ§Ãµes de pÃ¡gina e dados estruturados da primeira visita.
  */
 (function() {
@@ -126,7 +126,7 @@
 			if (hubTrackerConfig.meta_debug) {
 				console.warn('[HUB META] AVISO: Existe uma implementação anterior do Meta Pixel carregada na página. Ela precisa ser removida.');
 			}
-			// Como o Pixel já existe, o Hub não deve recriar o snippet base, mas apenas tentar usar a instância existente.
+			// Como o Pixel já existe, o VitPress não deve recriar o snippet base, mas apenas tentar usar a instância existente.
 		} else {
 			// Injeta a biblioteca do Meta Pixel
 			!function(f,b,e,v,n,t,s)

@@ -45,6 +45,10 @@ class FormService {
 	 * Renderiza o shortcode [hub_form]
 	 */
 	public function render_shortcode() {
+		// A captação é do Atendente: o formulário independente não é exibido (o shortcode segue registrado).
+		if ( ! LeadCapturePolicy::standalone_forms_allowed() ) {
+			return '';
+		}
 		wp_enqueue_script( 'jquery' );
 		
 		ob_start();
@@ -160,6 +164,10 @@ class FormService {
 	 * Processa a submissÃ£o via AJAX
 	 */
 	public function handle_submit() {
+		// Bloqueio no ponto de captação: antes de qualquer leitura da requisição, gravação, e-mail ou evento.
+		if ( ! LeadCapturePolicy::standalone_forms_allowed() ) {
+			wp_send_json_error( array( 'code' => LeadCapturePolicy::BLOCKED_CODE, 'message' => LeadCapturePolicy::BLOCKED_MESSAGE ), 410 );
+		}
 		check_ajax_referer( 'hub_submit_form_nonce', 'hub_nonce' );
 
 		$name  = isset( $_POST['hub_name'] ) ? sanitize_text_field( $_POST['hub_name'] ) : '';

@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Classe Abstrata Base para Perfis de Segmento no Hub.
+ * Classe Abstrata Base para Perfis de Segmento no VitPress.
  */
 abstract class AbstractProfile {
 
@@ -48,7 +48,7 @@ abstract class AbstractProfile {
 	abstract public function get_labels();
 
 	/**
-	 * Estágios do Pipeline Comercial (Padrão para todo o Hub).
+	 * Estágios do Pipeline Comercial (Padrão para todo o VitPress).
 	 * Representa o funil de aquisição de clientes.
 	 *
 	 * @return array Array de slugs e títulos dos estágios.

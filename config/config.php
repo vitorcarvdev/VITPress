@@ -1,11 +1,11 @@
 <?php
 /**
- * Hub Plugin Configuration File
+ * VitPress Plugin Configuration File
  * 
- * Este arquivo armazena configurações técnicas e internas do plugin Hub.
+ * Este arquivo armazena configurações técnicas e internas do plugin VitPress.
  * Alterado manualmente pelo desenvolvedor / equipe da agência.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

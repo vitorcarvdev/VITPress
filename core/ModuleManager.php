@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Gerenciador e Carregador Dinâmico de Módulos Independentes do Hub.
+ * Gerenciador e Carregador Dinâmico de Módulos Independentes do VitPress.
  */
 class ModuleManager {
 

@@ -190,10 +190,10 @@ class PluginProtectionService {
 
 		wp_die(
 			__(
-				'O gerenciamento de plugins está protegido pelo Hub. Apenas os administradores autorizados podem instalar, atualizar, ativar, desativar ou remover plugins. Caso necessite dessa permissão, entre em contato com o administrador responsável.',
+				'O gerenciamento de plugins está protegido pelo VitPress. Apenas os administradores autorizados podem instalar, atualizar, ativar, desativar ou remover plugins. Caso necessite dessa permissão, entre em contato com o administrador responsável.',
 				'hub'
 			),
-			__( 'Acesso Negado — Hub', 'hub' ),
+			__( 'Acesso Negado — VitPress', 'hub' ),
 			[ 'response' => 403, 'back_link' => true ]
 		);
 	}

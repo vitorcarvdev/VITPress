@@ -389,7 +389,7 @@
 				renderFooterControl(nextStep);
 			});
 		} else {
-			// Fim do fluxo -> Submeter Lead ao Hub
+			// Fim do fluxo -> Submeter Lead ao VitPress
 			submitLead();
 		}
 	}

@@ -13,16 +13,23 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class PipelineContactSync {
 
+	/**
+	 * Registra o lead no pipeline do VitAds e grava o vínculo no lead.
+	 *
+	 * @return string shared_contact_id (UUID em minúsculas) quando o VitAds vinculou o lead; '' em falha,
+	 *                ambiguidade, integração indisponível ou resposta sem id válido. Quem chama pode ignorar o retorno.
+	 */
 	public static function register_lead( $lead_id ) {
 		try {
 			$lead = self::lead( $lead_id );
 			if ( ! $lead || ! self::enabled() ) {
-				return;
+				return '';
 			}
 			$body = self::request( 'POST', '/pipeline/contact/resolve', self::resolve_payload( $lead ) );
-			self::store_link( $lead, $body );
+			return self::store_link( $lead, $body );
 		} catch ( \Throwable $e ) {
 			error_log( '[HUB PIPELINE] resolve_failed' );
+			return '';
 		}
 	}
 
@@ -183,10 +190,11 @@ class PipelineContactSync {
 	/**
 	 * @param object               $lead
 	 * @param array<string, mixed>|null $body
+	 * @return string UUID válido em minúsculas, ou '' quando não há vínculo (nada é gravado nesse caso).
 	 */
 	private static function store_link( $lead, $body ) {
 		if ( ! is_array( $body ) || empty( $body['shared_contact_id'] ) || ! empty( $body['ambiguous'] ) ) {
-			return;
+			return '';
 		}
 		if ( (string) ( $lead->shared_contact_id ?? '' ) !== (string) $body['shared_contact_id'] ) {
 			Database::db()->update(
@@ -198,6 +206,7 @@ class PipelineContactSync {
 			);
 		}
 		self::apply_remote( (int) $lead->id, $body );
+		return VitAdsEventService::normalize_shared_contact_id( $body['shared_contact_id'] );
 	}
 
 	/**

@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Template de Onboarding do Plugin Hub - Escolha de Perfil de Segmento.
+ * Template de Onboarding do Plugin VitPress - Escolha de Perfil de Segmento.
  */
 ?>
 <div class="wrap hub-onboarding-wrap">
