@@ -345,6 +345,56 @@ $moved   = ( new BackupFileMover( array(), '0123012301230123', journal_to( $jour
 check( $moved['ok'] && 'x' === @file_get_contents( "$work/site4/wp-content/uploads/.vitpress-old-0123012301230123-2026/x.txt" ), 'mesclagem: arquivo do backup no lugar de uma pasta do destino troca o item inteiro (com cópia antiga)' );
 check( array() === BackupFileMover::rollback( $journal ) && 'x' === @file_get_contents( "$work/site4/wp-content/uploads/2026/x.txt" ), 'mesclagem: e a reversão devolve a pasta' );
 
+// ---------------------------------------------------------------- Cópia do próprio VitPress dentro do backup (pasta com outro nome)
+$main = "<?php\nfunction activate_hub_plugin() {}\n";
+write_file( "$work/extract5/wp-content/plugins/VITPress/hub.php", $main );
+write_file( "$work/extract5/wp-content/plugins/hub-vitagencia/hub.php", $main );
+write_file( "$work/extract5/wp-content/plugins/outro-plugin/hub.php", "<?php\n// plugin de terceiros com o mesmo nome de arquivo\n" );
+write_file( "$work/extract5/wp-content/plugins/seo/seo.php", "<?php\n" );
+write_file( "$work/extract5/wp-content/themes/tema/style.css", 'tema' );
+write_file( "$work/site5/wp-content/plugins/hub-vitagencia/hub.php", 'em-uso' );
+$copies = BackupFileMover::detect_plugin_copies( "$work/extract5/wp-content/plugins" );
+sort( $copies );
+check( array( 'VITPress', 'hub-vitagencia' ) === $copies, 'cópias do VitPress no backup são reconhecidas pelo arquivo principal (não por nome) e plugins de terceiros não' );
+check( array() === BackupFileMover::detect_plugin_copies( "$work/nao-existe" ), 'sem pasta de plugins: nada detectado' );
+$journal = array();
+$moved   = ( new BackupFileMover( array_merge( array( 'hub-vitagencia' ), $copies ), '5555666677778888', journal_to( $journal ), "$work/deferred5" ) )->move( "$work/extract5/wp-content", "$work/site5/wp-content" );
+check( $moved['ok'] && ! file_exists( "$work/site5/wp-content/plugins/VITPress" ), 'a cópia do VitPress com outro nome não é restaurada (o plugin não é carregado duas vezes)' );
+check( 'em-uso' === @file_get_contents( "$work/site5/wp-content/plugins/hub-vitagencia/hub.php" ) && is_file( "$work/site5/wp-content/plugins/outro-plugin/hub.php" ) && is_file( "$work/site5/wp-content/plugins/seo/seo.php" ) && is_file( "$work/site5/wp-content/themes/tema/style.css" ), 'a pasta em uso é mantida e os demais plugins e temas do backup são restaurados' );
+
+// Num WordPress novo (perfil ainda não escolhido) a Área VitAgência, com Backup/Restaurar, já precisa estar no menu.
+$admin_src = (string) file_get_contents( HUB_PATH . 'core/Admin.php' );
+check( false === strpos( $admin_src, 'is_profile_selected' ) && false === strpos( $admin_src, 'render_onboarding_page' ) && ! file_exists( HUB_PATH . 'templates/onboarding.php' ), 'o menu não depende mais de um perfil escolhido: não há tela de escolha ao ativar, e a Área VitAgência sempre existe' );
+$trafego_src = (string) file_get_contents( HUB_PATH . 'admin/views/vitagencia-trafego.php' );
+check( false !== strpos( $trafego_src, 'name="hub_active_profile"' ) && false !== strpos( $trafego_src, 'Escolha a sua área' ) && false !== strpos( (string) file_get_contents( HUB_PATH . 'modules/VitAgencia/VitAgenciaModule.php' ), "set_active_profile( sanitize_key( wp_unslash( \$_POST['hub_active_profile'] ) ) )" ), 'a área de atuação é escolhida na aba Marketing' );
+check( false !== strpos( (string) file_get_contents( HUB_PATH . 'modules/VitAgencia/VitAgenciaModule.php' ), "! current_user_can( \$this->get_capability() ) ) {\n\t\t\twp_die( 'Acesso Negado. Área restrita" ) || false !== strpos( str_replace( "\r\n", "\n", (string) file_get_contents( HUB_PATH . 'modules/VitAgencia/VitAgenciaModule.php' ) ), "wp_die( 'Acesso Negado. Área restrita à equipe VitAgência.' )" ), 'a página continua exigindo a capability da área restrita' );
+
+$service_src = (string) file_get_contents( HUB_PATH . 'core/Services/BackupService.php' );
+// Backup e Restauração: página própria no menu principal (não mais aba da área restrita); S3 na aba Amazon.
+$menu_src = str_replace( "\r\n", "\n", $admin_src );
+check( false !== strpos( $menu_src, "'hub-backup'," ) && false !== strpos( $menu_src, "'Backup e Restauração'," ) && false !== strpos( $menu_src, "array( \$this, 'render_backup_page' )" ), 'o menu principal tem a página Backup e Restauração' );
+$tabs_src = (string) file_get_contents( HUB_PATH . 'admin/views/vitagencia.php' );
+check( false === strpos( $tabs_src, '>Backup</a>' ) && false !== strpos( $tabs_src, '>Amazon</a>' ) && false === strpos( $tabs_src, '>E-mails</a>' ), 'a aba Backup saiu da área restrita e a aba E-mails passou a se chamar Amazon' );
+$backup_view = (string) file_get_contents( HUB_PATH . 'admin/views/vitagencia-backup.php' );
+$amazon_view = (string) file_get_contents( HUB_PATH . 'admin/views/vitagencia-emails.php' );
+check( false === strpos( $backup_view, 'hub_save_s3_backup' ) && false !== strpos( $amazon_view, 'hub_save_s3_backup' ) && false !== strpos( $amazon_view, 'Configuração Amazon SES' ), 'a integração com o Amazon S3 está na aba Amazon, junto do SES' );
+check( false === strpos( $backup_view, 'tab=backup' ) && false === strpos( $service_src, 'tab=backup' ) && false === strpos( (string) file_get_contents( HUB_PATH . 'modules/VitAgencia/VitAgenciaModule.php' ), 'tab=backup' ), 'nenhum redirecionamento aponta mais para a antiga aba Backup' );
+check( 8 === substr_count( $service_src, 'self::can_manage_backups()' ) && 1 === substr_count( $service_src, "current_user_can( 'hub_vitagencia_manage_internal' )" ), 'as ações de backup e restauração valem para administradores (manage_options) e para a equipe da área restrita' );
+// Troca de URLs na restauração: todas as tabelas e colunas, sempre para https, permalinks renovados.
+check( false !== strpos( $service_src, 'replace_urls_in_staged_tables(' ) && false !== strpos( $service_src, "'staged_tables'" ) && false === strpos( $service_src, 'run_full_database_replace' ) && false === strpos( $service_src, 'hub_safe_replace' ), 'a troca de URL usa o novo substituidor sobre todas as tabelas restauradas (o antigo, de 5 colunas, saiu)' );
+check( false !== strpos( $service_src, "set_url_scheme( \$url, 'https' )" ) && false !== strpos( $service_src, "'hub/restore_force_https'" ) && false !== strpos( $service_src, "'dest_url' => self::restore_destination_url()" ), 'a URL de destino é sempre https (filtro só para testes sem certificado)' );
+check( false !== strpos( $service_src, "'hub_restore_rewrite_pending'" ) && false !== strpos( $service_src, "add_action( 'admin_init', array( \$this, 'flush_rewrite_after_restore' ) )" ) && false !== strpos( $service_src, 'flush_rewrite_rules( true )' ), 'os permalinks são renovados no primeiro acesso ao painel depois da restauração' );
+check( false !== strpos( $service_src, 'SUBSTRING( meta_key, %d )' ), 'metadados de usuário com o prefixo do site no nome são renomeados' );
+// Depois da troca e ao concluir, o usuário vai para a raiz do site restaurado (o login do backup pode estar oculto em /vcsis/).
+$backup_js = (string) file_get_contents( HUB_PATH . 'admin/views/vitagencia-backup.php' );
+check( false !== strpos( $service_src, "\$response['site_url'] = trailingslashit( self::restore_destination_url() );" ) && false === strpos( $service_src, 'wp_login_url' ) && false === strpos( $backup_js, 'login_url' ), 'o painel não leva mais à tela de login: usa a raiz do site restaurado (sempre https)' );
+check( false !== strpos( $backup_js, "data.closed && action === 'confirm' && data.site_url" ) && false !== strpos( $backup_js, "attr('href', data.site_url)" ), 'ao confirmar a restauração e no link depois de aplicar, o destino é a raiz do site' );
+// Geração do backup: limites de tempo/memória e leitura do banco em lotes (site de tamanho real).
+$service_src = (string) file_get_contents( HUB_PATH . 'core/Services/BackupService.php' );
+check( false !== strpos( $service_src, 'private function lift_backup_limits()' ) && substr_count( $service_src, '$this->lift_backup_limits();' ) >= 3, 'geração do backup remove o limite de tempo e eleva a memória (banco e arquivos)' );
+check( false !== strpos( $service_src, 'dump_row_batches( $table )' ) && false === strpos( $service_src, '"SELECT * FROM `$table`", ARRAY_N );' ), 'o dump lê cada tabela em lotes, sem carregá-la inteira na memória' );
+check( false !== strpos( $service_src, 'normalize_active_plugins(' ) && false !== strpos( $service_src, "'plugin_copies'" ), 'o banco restaurado tem a lista de plugins ativos ajustada' );
+
 // ---------------------------------------------------------------- Importador (banco simulado)
 class FakeDb {
 	public $log = array();

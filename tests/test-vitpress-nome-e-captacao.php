@@ -309,7 +309,9 @@ namespace NomeCaptacaoTest {
 
 	// Nenhuma menção nova a "Hub" como palavra (fora de namespaces/classes e das exceções documentadas).
 	$allowed_fragments = array(
-		'Hub VitAgência', 'Hub VitAgencia',          // produto/geração anterior: backups antigos e rótulos legados
+		"'Hub VitAgencia'",                          // valor do campo generator nos backups antigos (compatibilidade; nunca exibido)
+		"'Hub VitAgência Admin'", "'Hub VitAgência', 'hub_connector'", // rótulos enviados ao Pipeline Central (contrato externo; nunca exibidos neste site)
+		'generator VitPress ou Hub VitAgencia',      // comentário que documenta o valor acima
 		'# BEGIN Hub PHP Settings', '# END Hub PHP Settings', // marcador já gravado no .htaccess dos sites
 	);
 	$offenders = array();
@@ -360,6 +362,35 @@ namespace NomeCaptacaoTest {
 	}
 	check( 1 === preg_match( "/const ACCEPTED_GENERATORS\s*=\s*array\(\s*'VitPress',\s*'Hub VitAgencia'\s*\)/", $read( 'core/Services/Backup/BackupArchiveValidator.php' ) ), 'backups do VitPress e do Hub VitAgência continuam aceitos' );
 	check( false !== strpos( $read( 'core/Services/BackupService.php' ), 'VitPress Database Backup' ) && false === strpos( $read( 'core/Services/BackupService.php' ), '-- Hub Database Backup' ), 'cabeçalho dos novos dumps usa VitPress (os leitores não dependem dele)' );
+
+	// ------------------------------------------------------------ 7. "Página de Conversão Limpa" removida; o que o Atendente usa foi mantido
+	$trafego = $read( 'admin/views/vitagencia-trafego.php' );
+	$atend_view = $read( 'admin/views/atendente.php' );
+	$toolsmod = $read( 'modules/Tools/ToolsModule.php' );
+	$module  = $read( 'modules/VitAgencia/VitAgenciaModule.php' );
+	check( ! file_exists( $root . '/templates/page-clean-conversion.php' ), 'template da Página de Conversão Limpa removido' );
+	check( file_exists( $root . '/templates/page-clean-thank-you.php' ) && false !== strpos( $formsvc, "is_page( 'obrigado-contato' )" ), 'o template e a página /obrigado-contato seguem como antes' );
+	check( false === strpos( $formsvc, 'hub_generate_page' ) && false === strpos( $formsvc, 'handle_generate_page' ) && false === strpos( $formsvc, "is_page( 'novo-lead' )" ), 'gerador de página e override do /novo-lead removidos do código' );
+	$gone = array( 'Página de Conversão Limpa', 'Gerar Página', '[hub_form]', 'forms[receive_email]', 'forms[send_confirm]', 'forms[show_testimonial]', 'forms[testimonial_', 'hub_generate_page' );
+	$left = array_filter( $gone, static fn ( $s ) => false !== strpos( $trafego, $s ) );
+	check( array() === $left, 'aba Marketing não exibe mais gerador, shortcode, e-mail interno, confirmação nem depoimento' . ( $left ? ' - restou: ' . implode( ', ', $left ) : '' ) );
+	check( false === strpos( $trafego, 'forms[whatsapp]' ) && false !== strpos( $atend_view, 'name="forms[whatsapp]"' ) && false !== strpos( $atend_view, 'name="forms[whatsapp_msg]"' ), 'WhatsApp de destino e mensagem ficam na página do Atendente (não mais na aba Marketing)' );
+	check( false !== strpos( $collector, "\$forms['whatsapp']" ) && false !== strpos( $collector, "\$forms['whatsapp_msg']" ), 'o Atendente continua lendo forms.whatsapp e forms.whatsapp_msg' );
+	$geral = $read( 'admin/views/vitagencia-geral.php' );
+	check( 1 === substr_count( $geral, 'type="checkbox"' ) && false !== strpos( $geral, 'Ativar integração VitAds, VitZap e Pipeline' ) && false === strpos( $geral, 'hub_crm_enabled' ) && false === strpos( $geral, 'marketing_pipeline_enabled' ), 'aba Geral tem uma única chave de ativação (VitAds, VitZap e Pipeline)' );
+	check( false !== strpos( $module, "\$settings['marketing_pipeline_enabled'] = ! empty( \$_POST['vitads_enabled'] )" ) && false !== strpos( $module, "\$settings['crm_enabled'] = ( ! empty( \$_POST['vitads_enabled'] )" ),'a chave única grava vitads.enabled, marketing_pipeline_enabled e crm_enabled juntos' );
+	$backup = $read( 'admin/views/vitagencia-backup.php' );
+	check( 1 === substr_count( $backup, '<h3>BACKUP</h3>' ) && false === strpos( $backup, '<h3>BACKUP COMPLETO</h3>' ) && false === strpos( $backup, '<h3>BANCO DE DADOS</h3>' ), 'aba Backup tem um único título BACKUP' );
+	check( false !== strpos( $backup, 'name="action" value="hub_run_backup_full"' ) && false !== strpos( $backup, 'name="action" value="hub_run_backup_db"' ) && strpos( $backup, 'hub_run_backup_full' ) < strpos( $backup, 'hub_run_backup_db' ) && false !== strpos( $backup, 'display: flex' ), 'os botões de backup completo e de banco de dados ficam lado a lado, com as mesmas ações' );
+	$perfil = $read( 'admin/views/tools-perfil.php' );
+	check( false === strpos( $perfil, 'hub_crm_enabled' ) && false === strpos( $perfil, "'crm_enabled'] =" ), 'Ferramentas > Perfil não tem mais o interruptor de CRM nem grava crm_enabled' );
+	check( false !== strpos( $module, "! empty( \$license_status['is_valid'] )" ), 'a chave única só liga os módulos comerciais com licença válida' );
+	$vitag = $read( 'admin/views/vitagencia.php' );
+	check( false === strpos( $trafego, 'collector_notification_emails' ) && false !== strpos( $atend_view, 'name="collector[notification_emails]"' ), 'o e-mail de notificação é o campo da própria página do Atendente (a aba Marketing não tem cópia)' );
+	check( false !== strpos( $toolsmod, '\'notification_emails\'  => sanitize_text_field( $raw[\'notification_emails\']' ) && false !== strpos( $collector, '$settings[\'notification_emails\']' ) && false === strpos( $module, 'collector_notification_emails' ), 'o e-mail é gravado em hub_lead_collector.notification_emails, que send_team_notification() lê' );
+	check( false !== strpos( $toolsmod, 'error=not_persisted' ) && false !== strpos( $toolsmod, "wp_cache_delete( 'alloptions', 'options' )" ) && false !== strpos( $atend_view, 'Diagnóstico do salvamento' ) && false !== strpos( $atend_view, 'not_persisted' ), 'Atendente: confere o que ficou gravado no banco, limpa o cache de opções e mostra diagnóstico (banco x cache)' );
+	check( false !== strpos( $trafego, 'Conversões e Marketing' ) && false !== strpos( $trafego, 'Salvar Configurações de Tráfego' ), 'bloco Conversões e Marketing e o botão de salvar seguem na aba' );
+	check( false !== strpos( $toolsmod, '$forms        = isset( $hub_settings[\'forms\'] ) && is_array( $hub_settings[\'forms\'] )' ) && false !== strpos( $toolsmod, 'error=incomplete' ) && false === strpos( $toolsmod, '\'receive_email\' => sanitize_email' ), 'salvar o Atendente mescla em forms (só WhatsApp/mensagem mudam) e um formulário incompleto não apaga as configurações' );
 
 	if ( $failed > 0 ) {
 		echo "RESULTADO: {$failed} falha(s)\n";

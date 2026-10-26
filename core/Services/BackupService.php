@@ -10,6 +10,7 @@ use Hub\Core\Services\Backup\RecoveryEndpoint;
 use Hub\Core\Services\Backup\RecoveryPreflight;
 use Hub\Core\Services\Backup\RestoreOperation;
 use Hub\Core\Services\Backup\RestoreRunner;
+use Hub\Core\Services\Backup\UrlReplacer;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -66,8 +67,16 @@ class BackupService {
 		}
 	}
 
+	/**
+	 * Backup e restauração ficam no menu principal e valem para quem administra o site; a equipe da área restrita
+	 * (capability própria) também continua autorizada.
+	 */
+	public static function can_manage_backups() {
+		return current_user_can( 'manage_options' ) || current_user_can( 'hub_vitagencia_manage_internal' );
+	}
+
 	public function cache_flush_notice() {
-		if ( ! $this->cache_flush_pending || ! current_user_can( 'hub_vitagencia_manage_internal' ) ) {
+		if ( ! $this->cache_flush_pending || ! self::can_manage_backups() ) {
 			return;
 		}
 		$text = 'disabled' === $this->cache_flush_pending
@@ -108,6 +117,7 @@ class BackupService {
 
 	private function init_hooks() {
 		add_action( 'admin_init', array( $this, 'cleanup_abandoned_backups' ) );
+		add_action( 'admin_init', array( $this, 'flush_rewrite_after_restore' ) );
 		
 		// Remover cron antigo, caso exista na transição
 		add_action( 'init', array( $this, 'unschedule_legacy_crons' ) );
@@ -248,10 +258,83 @@ class BackupService {
 		}
 	}
 
+	const DUMP_BATCH_ROWS = 500;
+
+	/**
+	 * Gerar o backup percorre o banco e o disco inteiros: com o limite padrão de execução (30 a 60 s) e de memória da
+	 * hospedagem, um site de tamanho real morria no meio e o download vinha vazio ou corrompido.
+	 */
+	private function lift_backup_limits() {
+		@set_time_limit( 0 );
+		@ini_set( 'memory_limit', '1024M' );
+		@ignore_user_abort( true );
+	}
+
+	/**
+	 * Linhas da tabela em lotes (sem carregar a tabela inteira na memória). Com chave primária de uma coluna inteira o
+	 * lote seguinte parte da última chave lida; nos demais casos usa LIMIT/OFFSET ordenado pela chave primária (se houver).
+	 *
+	 * @return \Generator<array> Cada item é um lote de linhas (listas de valores).
+	 */
+	private function dump_row_batches( $table ) {
+		global $wpdb;
+		$columns = $wpdb->get_results( "SHOW COLUMNS FROM `$table`", ARRAY_A );
+		$keys    = $wpdb->get_results( "SHOW KEYS FROM `$table` WHERE Key_name = 'PRIMARY'", ARRAY_A );
+		usort( $keys, static function ( $a, $b ) {
+			return (int) $a['Seq_in_index'] - (int) $b['Seq_in_index'];
+		} );
+		$order = array();
+		foreach ( $keys as $key ) {
+			$order[] = '`' . str_replace( '`', '``', $key['Column_name'] ) . '`';
+		}
+
+		$keyset_index = null;
+		if ( 1 === count( $keys ) ) {
+			foreach ( (array) $columns as $index => $column ) {
+				if ( $column['Field'] === $keys[0]['Column_name'] && preg_match( '/int/i', $column['Type'] ) ) {
+					$keyset_index = $index;
+				}
+			}
+		}
+
+		$batch = self::DUMP_BATCH_ROWS;
+		if ( null !== $keyset_index ) {
+			$last = null;
+			while ( true ) {
+				$where = null === $last ? '' : ' WHERE ' . $order[0] . ' > ' . $last;
+				$rows  = $wpdb->get_results( "SELECT * FROM `$table`{$where} ORDER BY {$order[0]} LIMIT {$batch}", ARRAY_N );
+				if ( ! $rows ) {
+					return;
+				}
+				yield $rows;
+				$last = (string) end( $rows )[ $keyset_index ];
+				if ( 1 !== preg_match( '/^-?\d+$/', $last ) ) {
+					throw new \RuntimeException( 'Chave primária inesperada em ' . $table );
+				}
+				if ( count( $rows ) < $batch ) {
+					return;
+				}
+			}
+		}
+
+		$order_sql = $order ? ' ORDER BY ' . implode( ', ', $order ) : '';
+		for ( $offset = 0; ; $offset += $batch ) {
+			$rows = $wpdb->get_results( "SELECT * FROM `$table`{$order_sql} LIMIT {$batch} OFFSET {$offset}", ARRAY_N );
+			if ( ! $rows ) {
+				return;
+			}
+			yield $rows;
+			if ( count( $rows ) < $batch ) {
+				return;
+			}
+		}
+	}
+
 	private function generate_raw_sql() {
 		global $wpdb;
+		$this->lift_backup_limits();
 		$tables = $wpdb->get_col( 'SHOW TABLES' );
-		
+
 		$tmp_file = wp_tempnam( 'hub_db_dump' );
 		$handle   = fopen( $tmp_file, 'w' );
 		
@@ -265,11 +348,14 @@ class BackupService {
 				fwrite( $handle, "DROP TABLE IF EXISTS `$table`;\n" );
 				fwrite( $handle, $create_table[1] . ";\n\n" );
 
-				$rows = $wpdb->get_results( "SELECT * FROM `$table`", ARRAY_N );
-				if ( $rows ) {
+				$wrote = false;
+				foreach ( $this->dump_row_batches( $table ) as $rows ) {
 					foreach ( $rows as $row ) {
 						fwrite( $handle, BackupSql::insert_statement( $table, $row ) . "\n" );
 					}
+					$wrote = true;
+				}
+				if ( $wrote ) {
 					fwrite( $handle, "\n" );
 				}
 			}
@@ -280,6 +366,7 @@ class BackupService {
 	}
 
 	public function generate_db_file() {
+		$this->lift_backup_limits();
 		$this->cleanup_abandoned_backups();
 		$this->prepare_temp_dir();
 		
@@ -296,6 +383,7 @@ class BackupService {
 			return new \WP_Error( 'no_zip', 'A extensão ZipArchive não está ativa neste servidor.' );
 		}
 
+		$this->lift_backup_limits();
 		$this->cleanup_abandoned_backups();
 		$this->prepare_temp_dir();
 
@@ -374,7 +462,7 @@ class BackupService {
 	}
 
 	public function handle_manual_db_backup() {
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) wp_die( 'Acesso negado.' );
+		if ( ! self::can_manage_backups() ) wp_die( 'Acesso negado.' );
 		check_admin_referer( 'hub_run_backup', 'hub_nonce' );
 
 		$filepath = $this->generate_db_file();
@@ -394,7 +482,7 @@ class BackupService {
 	}
 
 	public function handle_manual_full_backup() {
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) wp_die( 'Acesso negado.' );
+		if ( ! self::can_manage_backups() ) wp_die( 'Acesso negado.' );
 		check_admin_referer( 'hub_run_backup', 'hub_nonce' );
 
 		$filepath = $this->generate_full_zip_file();
@@ -416,7 +504,7 @@ class BackupService {
 
 		public function ajax_upload_chunk() {
 		check_ajax_referer( 'hub_upload_backup', 'hub_nonce' );
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) { @ob_end_clean(); wp_send_json_error( 'Sem permissão.' ); }
+		if ( ! self::can_manage_backups() ) { @ob_end_clean(); wp_send_json_error( 'Sem permissão.' ); }
 
 		$this->prepare_temp_dir();
 
@@ -485,14 +573,14 @@ class BackupService {
 				@ob_end_clean(); wp_send_json_error( 'Falha ao preparar o arquivo para restauração.' );
 			}
 
-			@ob_end_clean(); wp_send_json_success( array( 'redirect' => admin_url( "admin.php?page=hub-vitagencia&tab=backup&restore_file={$final_name}" ) ) );
+			@ob_end_clean(); wp_send_json_success( array( 'redirect' => admin_url( "admin.php?page=hub-backup&restore_file={$final_name}" ) ) );
 		}
 
 		@ob_end_clean(); wp_send_json_success( array( 'message' => 'Chunk recebido.' ) );
 	}
 
 	public function handle_upload_backup() {
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) wp_die();
+		if ( ! self::can_manage_backups() ) wp_die();
 		check_admin_referer( 'hub_upload_backup', 'hub_nonce' );
 
 		$this->cleanup_abandoned_backups();
@@ -516,7 +604,7 @@ class BackupService {
 			wp_die( 'Falha ao preparar o arquivo para restauração.' );
 		}
 
-		wp_safe_redirect( admin_url( "admin.php?page=hub-vitagencia&tab=backup&restore_file={$filename}" ) );
+		wp_safe_redirect( admin_url( "admin.php?page=hub-backup&restore_file={$filename}" ) );
 		exit;
 	}
 
@@ -712,90 +800,143 @@ class BackupService {
 	}
 	
 
-	private function recursive_unserialize_replace( $data, $search_arr, $replace_arr ) {
-		if ( is_string( $data ) ) {
-			return str_replace( $search_arr, $replace_arr, $data );
-		} elseif ( is_array( $data ) ) {
-			$new_data = array();
-			foreach ( $data as $key => $value ) {
-				$new_data[ $key ] = $this->recursive_unserialize_replace( $value, $search_arr, $replace_arr );
-			}
-			return $new_data;
-		} elseif ( is_object( $data ) ) {
-			$new_data = clone $data;
-			foreach ( $data as $key => $value ) {
-				$new_data->$key = $this->recursive_unserialize_replace( $value, $search_arr, $replace_arr );
-			}
-			return $new_data;
-		}
-		return $data;
+	/**
+	 * URL do site de destino na restauração. Os sites do VitPress são sempre publicados em HTTPS, então a URL gravada
+	 * é sempre https, mesmo que o WordPress de destino ainda responda em http. O filtro existe só para ambientes de
+	 * teste sem certificado.
+	 */
+	public static function restore_destination_url() {
+		$url = site_url();
+		return apply_filters( 'hub/restore_force_https', true ) ? set_url_scheme( $url, 'https' ) : $url;
 	}
 
-	private function hub_safe_replace( $string, $search_arr, $replace_arr ) {
-		if ( is_serialized( $string ) ) {
-			$unserialized = @unserialize( $string );
-			if ( $unserialized !== false ) {
-				$replaced = $this->recursive_unserialize_replace( $unserialized, $search_arr, $replace_arr );
-				return serialize( $replaced );
-			}
-		}
-		return str_replace( $search_arr, $replace_arr, $string );
-	}
+	const URL_REPLACE_BATCH = 500;
 
 	/**
-	 * @param array<string,?string> $names Tabelas lógicas (options, users, usermeta, posts, postmeta) => nome real.
+	 * Troca a URL de origem pela de destino em TODAS as tabelas restauradas (tabelas temporárias) e em todas as
+	 * colunas de texto: conteúdo, títulos, comentários, links, termos, opções, metadados e tabelas de plugins.
+	 *
+	 * @param array<string,string> $staged tabela final => tabela temporária.
+	 * @return string '' ou a descrição do problema.
 	 */
-	private function run_full_database_replace( $old_url, $new_url, array $names ) {
+	private function replace_urls_in_staged_tables( UrlReplacer $replacer, array $staged ) {
 		global $wpdb;
-		$old_http = str_replace('https://', 'http://', $old_url);
-		$old_https = str_replace('http://', 'https://', $old_url);
-		$search_arr = [ $old_https, $old_http, str_replace('/', '\\/', $old_https), str_replace('/', '\\/', $old_http) ];
-		$replace_arr = [ $new_url, $new_url, str_replace('/', '\\/', $new_url), str_replace('/', '\\/', $new_url) ];
-
-		$columns = [
-			'options'  => [ 'id' => 'option_id', 'column' => 'option_value' ],
-			'postmeta' => [ 'id' => 'meta_id', 'column' => 'meta_value' ],
-			'posts'    => [ 'id' => 'ID', 'column' => 'post_content' ],
-			'usermeta' => [ 'id' => 'umeta_id', 'column' => 'meta_value' ],
-			'users'    => [ 'id' => 'ID', 'column' => 'user_url' ],
-		];
-		$tables = [];
-		foreach ( $columns as $name => $col_data ) {
-			if ( ! empty( $names[ $name ] ) ) {
-				$tables[ $names[ $name ] ] = $col_data;
-			}
+		$needles = $replacer->needles();
+		if ( ! $replacer->is_active() || ! $needles ) {
+			return '';
 		}
+		$quote  = static function ( $name ) {
+			return '`' . str_replace( '`', '``', $name ) . '`';
+		};
+		$schema = (string) $wpdb->get_var( 'SELECT DATABASE()' );
+		$text   = array( 'char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json' );
+		$ints   = array( 'tinyint', 'smallint', 'mediumint', 'int', 'bigint' );
 
-		foreach ( $tables as $table => $col_data ) {
-			$id_col = $col_data['id'];
-			$val_col = $col_data['column'];
-			$domain_only = str_replace(['https://', 'http://'], '', $old_url);
-			$query = $wpdb->prepare( "SELECT {$id_col}, {$val_col} FROM {$table} WHERE {$val_col} LIKE %s", '%' . $wpdb->esc_like($domain_only) . '%' );
-			$rows = $wpdb->get_results( $query );
-			if ( '' !== $wpdb->last_error ) {
-				return "leitura de {$table}";
-			}
-			if ( $rows ) {
-				foreach ( $rows as $row ) {
-					$old_val = $row->$val_col;
-					$new_val = $this->hub_safe_replace( $old_val, $search_arr, $replace_arr );
-					if ( $old_val !== $new_val && false === $wpdb->update( $table, [ $val_col => $new_val ], [ $id_col => $row->$id_col ] ) ) {
-						return "atualização de {$table}";
+		$previous                     = $wpdb->check_current_query;
+		$wpdb->check_current_query    = false;
+		try {
+			foreach ( $staged as $final => $table ) {
+				$columns = $wpdb->get_results( $wpdb->prepare( 'SELECT COLUMN_NAME AS name, DATA_TYPE AS type FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s ORDER BY ORDINAL_POSITION', $schema, $table ), ARRAY_A );
+				if ( '' !== $wpdb->last_error || ! $columns ) {
+					return 'leitura da estrutura de ' . $final;
+				}
+				$types      = array();
+				$text_cols  = array();
+				foreach ( $columns as $column ) {
+					$types[ $column['name'] ] = strtolower( $column['type'] );
+					if ( in_array( strtolower( $column['type'] ), $text, true ) ) {
+						$text_cols[] = $column['name'];
+					}
+				}
+				if ( ! $text_cols ) {
+					continue;
+				}
+				$keys = $wpdb->get_results( 'SHOW KEYS FROM ' . $quote( $table ) . " WHERE Key_name = 'PRIMARY'", ARRAY_A );
+				usort( $keys, static function ( $a, $b ) {
+					return (int) $a['Seq_in_index'] - (int) $b['Seq_in_index'];
+				} );
+				$pk = array_column( $keys, 'Column_name' );
+
+				$likes = array();
+				$args  = array();
+				foreach ( $text_cols as $column ) {
+					foreach ( $needles as $needle ) {
+						$likes[] = $quote( $column ) . ' LIKE %s';
+						$args[]  = '%' . $wpdb->esc_like( $needle ) . '%';
+					}
+				}
+				$match    = '(' . implode( ' OR ', $likes ) . ')';
+				$keyset   = 1 === count( $pk ) && in_array( $types[ $pk[0] ] ?? '', $ints, true );
+				$select   = $pk ? array_merge( $pk, $text_cols ) : array_column( $columns, 'name' );
+				$select   = array_values( array_unique( $select ) );
+				$selected = implode( ', ', array_map( $quote, $select ) );
+				$last     = null;
+
+				while ( true ) {
+					$where      = $match;
+					$where_args = $args;
+					if ( $keyset && null !== $last ) {
+						$where       = $quote( $pk[0] ) . ' > %s AND ' . $where;
+						$where_args  = array_merge( array( $last ), $args );
+					}
+					$sql  = "SELECT {$selected} FROM " . $quote( $table ) . " WHERE {$where}";
+					$sql .= $keyset ? ' ORDER BY ' . $quote( $pk[0] ) . ' LIMIT ' . self::URL_REPLACE_BATCH : '';
+					$rows = $wpdb->get_results( $wpdb->prepare( $sql, $where_args ), ARRAY_A );
+					if ( '' !== $wpdb->last_error ) {
+						return 'leitura de ' . $final;
+					}
+					if ( ! $rows ) {
+						break;
+					}
+					foreach ( $rows as $row ) {
+						$sets     = array();
+						$set_args = array();
+						foreach ( $text_cols as $column ) {
+							if ( null === $row[ $column ] ) {
+								continue;
+							}
+							$changed = $replacer->replace_value( $row[ $column ] );
+							if ( $changed !== $row[ $column ] ) {
+								$sets[]     = $quote( $column ) . ' = %s';
+								$set_args[] = $changed;
+							}
+						}
+						if ( ! $sets ) {
+							continue;
+						}
+						$conds      = array();
+						$cond_args  = array();
+						foreach ( $pk ? $pk : array_column( $columns, 'name' ) as $column ) {
+							if ( null === $row[ $column ] ) {
+								$conds[] = $quote( $column ) . ' IS NULL';
+							} else {
+								$conds[]     = $quote( $column ) . ' = %s';
+								$cond_args[] = $row[ $column ];
+							}
+						}
+						$update = 'UPDATE ' . $quote( $table ) . ' SET ' . implode( ', ', $sets ) . ' WHERE ' . implode( ' AND ', $conds ) . ( $pk ? '' : ' LIMIT 1' );
+						if ( false === $wpdb->query( $wpdb->prepare( $update, array_merge( $set_args, $cond_args ) ) ) ) {
+							return 'atualização de ' . $final;
+						}
+					}
+					if ( ! $keyset ) {
+						break;
+					}
+					$last = end( $rows )[ $pk[0] ];
+					if ( count( $rows ) < self::URL_REPLACE_BATCH ) {
+						break;
 					}
 				}
 			}
-		}
-		$elementor = $wpdb->query( $wpdb->prepare( "INSERT INTO `{$names['options']}` (option_name, option_value, autoload) VALUES (%s, %s, 'yes') ON DUPLICATE KEY UPDATE option_value = VALUES(option_value)", 'elementor_css_print_method', 'internal' ) );
-		$css       = empty( $names['postmeta'] ) ? 0 : $wpdb->query( $wpdb->prepare( "DELETE FROM `{$names['postmeta']}` WHERE meta_key = %s", '_elementor_css' ) );
-		if ( false === $elementor || false === $css ) {
-			return 'ajustes do Elementor';
+		} finally {
+			$wpdb->check_current_query = $previous;
 		}
 		return '';
 	}
 
 	/**
-	 * Ajustes do banco restaurado (prefixos, home/siteurl, URLs em conteúdo, metadados e users.user_url), feitos nas
-	 * tabelas temporárias antes da troca. Cada consulta é conferida; qualquer falha descarta a preparação.
+	 * Ajustes do banco restaurado (prefixos, home/siteurl, URLs em todas as tabelas, plugins ativos e permalinks), feitos
+	 * nas tabelas temporárias antes da troca. Cada consulta é conferida; qualquer falha descarta a preparação.
 	 *
 	 * @param array<string,?string> $tables options, users, usermeta, posts, postmeta => tabela temporária.
 	 * @return array{ok:bool,error:string}
@@ -814,20 +955,18 @@ class BackupService {
 		$old_prefix = (string) ( $state['old_prefix'] ?? $wpdb->prefix );
 
 		if ( $old_prefix !== $wpdb->prefix ) {
-			$renames = array(
-				array( 'options', 'option_name', 'user_roles' ),
-				array( 'usermeta', 'meta_key', 'capabilities' ),
-				array( 'usermeta', 'meta_key', 'user_level' ),
-				array( 'usermeta', 'meta_key', 'dashboard_quick_press_last_post_id' ),
-			);
-			foreach ( $renames as list( $name, $column, $key ) ) {
-				if ( empty( $tables[ $name ] ) ) {
-					continue;
-				}
-				if ( false === $wpdb->query( $wpdb->prepare( "UPDATE `{$tables[ $name ]}` SET {$column} = %s WHERE {$column} = %s", $wpdb->prefix . $key, $old_prefix . $key ) ) ) {
-					return $fail( 'ajuste de prefixo' );
-				}
+			if ( ! empty( $tables['options'] ) && false === $wpdb->query( $wpdb->prepare( "UPDATE `{$tables['options']}` SET option_name = %s WHERE option_name = %s", $wpdb->prefix . 'user_roles', $old_prefix . 'user_roles' ) ) ) {
+				return $fail( 'ajuste de prefixo' );
 			}
+			// Metadados de usuário com o prefixo do site no nome (permissões, nível, preferências de tela...).
+			if ( ! empty( $tables['usermeta'] ) && false === $wpdb->query( $wpdb->prepare( "UPDATE `{$tables['usermeta']}` SET meta_key = CONCAT( %s, SUBSTRING( meta_key, %d ) ) WHERE meta_key LIKE %s", $wpdb->prefix, strlen( $old_prefix ) + 1, $wpdb->esc_like( $old_prefix ) . '%' ) ) ) {
+				return $fail( 'ajuste de prefixo' );
+			}
+		}
+
+		$plugins_problem = $this->normalize_active_plugins( $options, (array) ( $state['plugin_copies'] ?? array() ) );
+		if ( '' !== $plugins_problem ) {
+			return $fail( $plugins_problem );
 		}
 
 		$new_url = (string) ( $state['dest_url'] ?? '' );
@@ -843,31 +982,75 @@ class BackupService {
 			return array( 'ok' => false, 'error' => 'o banco restaurado não tem as opções home/siteurl esperadas' );
 		}
 
-		if ( ! empty( $manifest['original_url'] ) && $manifest['original_url'] !== $new_url ) {
-			$problem = $this->run_full_database_replace( $manifest['original_url'], $new_url, $tables );
+		if ( ! empty( $manifest['original_url'] ) && rtrim( $manifest['original_url'], '/' ) !== rtrim( $new_url, '/' ) ) {
+			$problem = $this->replace_urls_in_staged_tables( new UrlReplacer( $manifest['original_url'], $new_url ), (array) ( $state['staged_tables'] ?? array() ) );
 			if ( '' !== $problem ) {
 				return $fail( 'substituição de URL: ' . $problem );
 			}
-			$old_http  = str_replace( 'https://', 'http://', $manifest['original_url'] );
-			$old_https = str_replace( 'http://', 'https://', $manifest['original_url'] );
-			if ( ! empty( $tables['posts'] ) ) {
-				foreach ( array( $old_http, $old_https ) as $old ) {
-					if ( false === $wpdb->query( $wpdb->prepare( "UPDATE `{$tables['posts']}` SET guid = replace(guid, %s, %s)", $old, $new_url ) ) ) {
-						return $fail( 'atualização de GUIDs' );
-					}
-				}
-			}
-			if ( ! empty( $tables['users'] ) ) {
-				$left = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM `{$tables['users']}` WHERE user_url = %s OR user_url = %s OR user_url LIKE %s OR user_url LIKE %s", $old_http, $old_https, $wpdb->esc_like( $old_http ) . '/%', $wpdb->esc_like( $old_https ) . '/%' ) );
-				if ( null === $left || '' !== $wpdb->last_error ) {
-					return $fail( 'conferência de users.user_url' );
-				}
-				if ( 0 !== (int) $left ) {
-					return array( 'ok' => false, 'error' => 'users.user_url ainda aponta para o endereço de origem' );
-				}
+			$elementor = $wpdb->query( $wpdb->prepare( "INSERT INTO `{$options}` (option_name, option_value, autoload) VALUES (%s, %s, 'yes') ON DUPLICATE KEY UPDATE option_value = VALUES(option_value)", 'elementor_css_print_method', 'internal' ) );
+			$css       = empty( $tables['postmeta'] ) ? 0 : $wpdb->query( $wpdb->prepare( "DELETE FROM `{$tables['postmeta']}` WHERE meta_key = %s", '_elementor_css' ) );
+			if ( false === $elementor || false === $css ) {
+				return $fail( 'ajustes do Elementor' );
 			}
 		}
+
+		// Regras de permalink e .htaccess do destino precisam ser refeitos com as configurações restauradas.
+		if ( false === $wpdb->query( $wpdb->prepare( "INSERT INTO `{$options}` (option_name, option_value, autoload) VALUES (%s, %s, 'yes') ON DUPLICATE KEY UPDATE option_value = VALUES(option_value)", 'hub_restore_rewrite_pending', '1' ) ) ) {
+			return $fail( 'marcação dos permalinks' );
+		}
 		return array( 'ok' => true, 'error' => '' );
+	}
+
+	/**
+	 * No primeiro acesso ao painel depois de uma restauração: renova as regras de permalink (e o .htaccess, quando
+	 * gravável), senão os links bonitos das páginas restauradas dão 404 até alguém salvar os permalinks.
+	 */
+	public function flush_rewrite_after_restore() {
+		if ( '1' !== (string) get_option( 'hub_restore_rewrite_pending', '' ) ) {
+			return;
+		}
+		delete_option( 'hub_restore_rewrite_pending' );
+		flush_rewrite_rules( true );
+	}
+	/**
+	 * Lista de plugins ativos do banco restaurado (tabela temporária): o VitPress em uso fica sempre ativo, sob o nome
+	 * de pasta deste site, e qualquer outra cópia dele que o backup traga sai da lista (a pasta da cópia não é restaurada).
+	 * Sem isso o site restaurado carregaria o plugin duas vezes, ou sem ele, e o painel de confirmação sumiria.
+	 *
+	 * @param string   $options Tabela temporária de opções.
+	 * @param string[] $copies  Pastas do backup que são outra cópia do VitPress.
+	 * @return string '' ou a descrição do problema.
+	 */
+	private function normalize_active_plugins( $options, array $copies ) {
+		global $wpdb;
+		$self  = basename( rtrim( str_replace( '\\', '/', HUB_PATH ), '/' ) ) . '/' . basename( HUB_FILE );
+		$value = $wpdb->get_var( "SELECT option_value FROM `{$options}` WHERE option_name = 'active_plugins'" );
+		if ( '' !== $wpdb->last_error ) {
+			return 'leitura dos plugins ativos';
+		}
+		$list = null === $value ? array() : maybe_unserialize( $value );
+		$list = is_array( $list ) ? $list : array();
+
+		$kept = array();
+		foreach ( $list as $plugin ) {
+			$dir = strstr( (string) $plugin, '/', true );
+			if ( basename( HUB_FILE ) === basename( (string) $plugin ) && false !== $dir && ( $dir === basename( dirname( $self ) ) || in_array( $dir, $copies, true ) ) ) {
+				continue;
+			}
+			$kept[] = $plugin;
+		}
+		$kept[] = $self;
+		$kept   = array_values( array_unique( $kept ) );
+		sort( $kept );
+
+		$new = maybe_serialize( $kept );
+		if ( $new === $value ) {
+			return '';
+		}
+		$ok = null === $value
+			? $wpdb->insert( $options, array( 'option_name' => 'active_plugins', 'option_value' => $new, 'autoload' => 'yes' ) )
+			: $wpdb->update( $options, array( 'option_value' => $new ), array( 'option_name' => 'active_plugins' ) );
+		return false === $ok ? 'ajuste dos plugins ativos' : '';
 	}
 
 	/**
@@ -895,7 +1078,7 @@ class BackupService {
 		@ignore_user_abort( true );
 		ob_start();
 		check_ajax_referer( 'hub_restore_chunk', 'hub_nonce' );
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) { @ob_end_clean(); wp_send_json_error( 'Sem permissão.' ); }
+		if ( ! self::can_manage_backups() ) { @ob_end_clean(); wp_send_json_error( 'Sem permissão.' ); }
 
 		$action = isset( $_POST['step'] ) ? sanitize_key( wp_unslash( $_POST['step'] ) ) : '';
 		$this->prepare_temp_dir();
@@ -913,14 +1096,14 @@ class BackupService {
 			$check = BackupArchiveValidator::validate( $filepath, false === $free ? null : (float) $free );
 			if ( ! $check['ok'] ) { @ob_end_clean(); wp_send_json_error( $check['error'] ); }
 			if ( BackupArchiveValidator::FORMAT_LEGACY_CONTENT === $check['format'] && empty( $_POST['confirm_files_only'] ) ) {
-				@ob_end_clean(); wp_send_json_error( 'Este backup antigo do Hub VitAgência (nome anterior do VitPress) contém apenas arquivos. Confirme a restauração somente dos arquivos para continuar.' );
+				@ob_end_clean(); wp_send_json_error( 'Este backup antigo do VitPress (versão anterior) contém apenas arquivos. Confirme a restauração somente dos arquivos para continuar.' );
 			}
 
 			$started = RestoreRunner::start(
 				$this->workspace_dir(),
 				$filepath,
 				$check,
-				array( 'owner' => array( 'user' => get_current_user_id() ), 'dest_url' => site_url(), 'env' => $this->restore_environment( '' ) )
+				array( 'owner' => array( 'user' => get_current_user_id() ), 'dest_url' => self::restore_destination_url(), 'env' => $this->restore_environment( '' ) )
 			);
 			if ( ! $started['ok'] ) { @ob_end_clean(); wp_send_json_error( $started['error'] ); }
 			@ob_end_clean(); wp_send_json_success( $this->restore_response( $started['op'], array( 'ok' => true, 'phase' => 'prepared', 'closed' => false ) ) );
@@ -948,11 +1131,13 @@ class BackupService {
 
 	private function restore_response( RestoreOperation $op, array $result ) {
 		$response = array( 'phase' => $result['phase'], 'closed' => ! empty( $result['closed'] ) );
-		if ( 'switched' === $result['phase'] ) {
-			$response['login_url'] = wp_login_url( admin_url( 'admin.php?page=hub-vitagencia&tab=backup' ) );
+		// Depois da troca (e ao concluir) o usuário vai para a raiz do site restaurado: a tela de login do backup pode estar oculta (/vcsis/).
+		if ( 'switched' === $result['phase'] || ! empty( $result['closed'] ) ) {
+			$response['site_url'] = trailingslashit( self::restore_destination_url() );
 		}
 		return $response;
 	}
+
 
 	private function wpdb_adapter() {
 		global $wpdb;
@@ -1007,7 +1192,7 @@ class BackupService {
 	}
 
 	public function handle_download_legacy() {
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) wp_die();
+		if ( ! self::can_manage_backups() ) wp_die();
 		check_admin_referer( 'hub_legacy_action', 'hub_nonce' );
 
 		$file_name = sanitize_text_field( $_POST['file_name'] ?? '' );
@@ -1036,7 +1221,7 @@ class BackupService {
 	}
 
 	public function handle_delete_legacy() {
-		if ( ! current_user_can( 'hub_vitagencia_manage_internal' ) ) wp_die();
+		if ( ! self::can_manage_backups() ) wp_die();
 		check_admin_referer( 'hub_legacy_action', 'hub_nonce' );
 
 		$file_name = sanitize_text_field( $_POST['file_name'] ?? '' );
@@ -1063,7 +1248,7 @@ class BackupService {
 			}
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=hub-vitagencia&tab=backup&message=legacy_deleted' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=hub-backup&message=legacy_deleted' ) );
 		exit;
 	}
 }

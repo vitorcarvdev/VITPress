@@ -3,7 +3,7 @@
  * Plugin Name: VitPress
  * Plugin URI: https://vcsis.com.br/hub
  * Description: VitPress — central de gestão com atendente virtual, Pipeline, conversões, indicadores, automações, suporte e ferramentas.
- * Version: 1.9.2
+ * Version: 1.9.3
  * Author: VitAgência + VCSIS
  * Author URI: https://vitagencia.com.br
  * Text Domain: hub
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // 1. Definição das Constantes Principais
-define( 'HUB_VERSION', '1.9.2' );
+define( 'HUB_VERSION', '1.9.3' );
 define( 'HUB_FILE', __FILE__ );
 define( 'HUB_PATH', plugin_dir_path( __FILE__ ) );
 define( 'HUB_URL', plugin_dir_url( __FILE__ ) );

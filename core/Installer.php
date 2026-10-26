@@ -253,18 +253,7 @@ class Installer {
 		) {$charset_collate};";
 
 		dbDelta( $sql_leads );
-		$stage_at = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'stage_updated_at'" );
-		if ( empty( $stage_at ) ) {
-			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN stage_updated_at datetime NULL" );
-		}
-		$stage_source = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'stage_source'" );
-		if ( empty( $stage_source ) ) {
-			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN stage_source varchar(30) NULL" );
-		}
-		$shared_contact = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'shared_contact_id'" );
-		if ( empty( $shared_contact ) ) {
-			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN shared_contact_id varchar(36) NULL" );
-		}
+		self::ensure_lead_columns();
 		dbDelta( $sql_clients );
 		dbDelta( $sql_events );
 		dbDelta( $sql_settings );
@@ -305,10 +294,121 @@ class Installer {
 		}
 	}
 
+
+	/**
+	 * Colunas de hub_leads adicionadas depois da criação original da tabela.
+	 * Nome => definição. Somente colunas aditivas e anuláveis (nunca há perda de dados).
+	 */
+	const LEAD_ADDED_COLUMNS = array(
+		'stage_updated_at'  => 'datetime NULL',
+		'stage_source'      => 'varchar(30) NULL',
+		'shared_contact_id' => 'varchar(36) NULL',
+	);
+
+	/** Transient que suspende novas tentativas de reparo após uma falha. */
+	const REPAIR_BACKOFF_KEY = 'hub_lead_schema_repair_backoff';
+	const REPAIR_BACKOFF_TTL = 3600;
+
+	/**
+	 * Nome da tabela de leads já delimitado por crases (o prefixo vem do WordPress).
+	 */
+	private static function leads_table() {
+		global $wpdb;
+		return '`' . str_replace( '`', '``', $wpdb->prefix . 'hub_leads' ) . '`';
+	}
+
+	/**
+	 * Colunas aditivas que faltam em hub_leads.
+	 *
+	 * @return string[]|null Lista (vazia = esquema completo) ou null se a tabela não existe.
+	 */
+	public static function missing_lead_columns() {
+		global $wpdb;
+		$previous = $wpdb->suppress_errors( true );
+		$existing = $wpdb->get_col( 'SHOW COLUMNS FROM ' . self::leads_table(), 0 );
+		$wpdb->suppress_errors( $previous );
+		if ( empty( $existing ) ) {
+			return null;
+		}
+		$existing = array_map( 'strtolower', $existing );
+		return array_values( array_diff( array_keys( self::LEAD_ADDED_COLUMNS ), $existing ) );
+	}
+
+	/**
+	 * Garante, de forma idempotente, as colunas aditivas de hub_leads.
+	 * Independe de hub_db_version: só altera o que realmente falta.
+	 * Uma coluna só entra em 'added' se o ALTER confirmou sucesso; se outra requisição
+	 * a criou antes, ela não é reportada como falha nem como adicionada por esta chamada.
+	 *
+	 * @return array{added: string[], failed: string[]}
+	 */
+	public static function ensure_lead_columns() {
+		global $wpdb;
+		$result  = array(
+			'added'  => array(),
+			'failed' => array(),
+		);
+		$missing = self::missing_lead_columns();
+		if ( empty( $missing ) ) {
+			return $result;
+		}
+		$table = self::leads_table();
+		foreach ( $missing as $column ) {
+			$previous = $wpdb->suppress_errors( true );
+			$ok       = $wpdb->query( "ALTER TABLE {$table} ADD COLUMN `{$column}` " . self::LEAD_ADDED_COLUMNS[ $column ] );
+			$error    = (string) $wpdb->last_error;
+			$wpdb->suppress_errors( $previous );
+			if ( false !== $ok ) {
+				$result['added'][] = $column;
+				continue;
+			}
+			$still_missing = self::missing_lead_columns();
+			if ( is_array( $still_missing ) && ! in_array( $column, $still_missing, true ) ) {
+				continue; // criada por outra requisição concorrente
+			}
+			$result['failed'][] = $column;
+			error_log( '[VitPress] Falha ao adicionar a coluna ' . $column . ' em hub_leads: ' . substr( $error, 0, 200 ) );
+		}
+		return $result;
+	}
+
+	/**
+	 * True se hub_leads existe e tem todas as colunas aditivas esperadas.
+	 */
+	public static function lead_schema_complete() {
+		return array() === self::missing_lead_columns();
+	}
+
 	public static function maybe_upgrade() {
 		$config = require HUB_PATH . 'config/config.php';
 		if ( get_option( 'hub_db_version' ) !== ( $config['db_version'] ?? '' ) ) {
 			self::install();
+			return;
 		}
+
+		// Caminho normal: uma única consulta SHOW COLUMNS e nada mais.
+		$missing = self::missing_lead_columns();
+		if ( array() === $missing ) {
+			return;
+		}
+
+		// Sites que já registram a versão atual do banco mas têm hub_leads sem colunas novas
+		// (ex.: 1.0.4 vindo do pacote 1.9.1). Após uma falha, não repete por uma hora.
+		if ( get_transient( self::REPAIR_BACKOFF_KEY ) ) {
+			return;
+		}
+		if ( null === $missing ) {
+			self::install(); // a tabela realmente não existe
+			$ok = self::lead_schema_complete();
+		} else {
+			$repair = self::ensure_lead_columns();
+			$ok     = empty( $repair['failed'] );
+		}
+		if ( $ok ) {
+			delete_transient( self::REPAIR_BACKOFF_KEY );
+			return;
+		}
+		set_transient( self::REPAIR_BACKOFF_KEY, time(), self::REPAIR_BACKOFF_TTL );
+		error_log( '[VitPress] Reparo do esquema de hub_leads não concluído; nova tentativa em ' . ( self::REPAIR_BACKOFF_TTL / 60 ) . ' minutos.' );
 	}
 }

@@ -34,6 +34,16 @@ if ( ! empty( $settings['attendant_avatar_id'] ) ) {
 		</div>
 	<?php endif; ?>
 
+	<?php if ( isset( $_GET['error'] ) && 'not_persisted' === $_GET['error'] ) : ?>
+		<div class="notice notice-error" style="margin-top: 15px;">
+			<p><strong>As configurações chegaram, mas não ficaram gravadas no banco de dados.</strong> <?php echo ! empty( $_GET['dberr'] ) ? 'Erro do banco: <code>' . esc_html( sanitize_text_field( wp_unslash( $_GET['dberr'] ) ) ) . '</code>. ' : ''; ?>Verifique a conexão e as permissões do banco de dados da hospedagem. As configurações anteriores foram mantidas.</p>
+		</div>
+	<?php endif; ?>
+	<?php if ( isset( $_GET['error'] ) && 'incomplete' === $_GET['error'] ) : ?>
+		<div class="notice notice-error" style="margin-top: 15px;">
+			<p><strong>Nada foi salvo.</strong> O servidor recebeu o formulário incompleto (campos recebidos: <?php echo absint( $_GET['posted'] ?? 0 ); ?>; limite <code>max_input_vars</code> do PHP: <?php echo absint( $_GET['max'] ?? 0 ); ?>). Isso costuma ser um firewall (Wordfence, ModSecurity, Cloudflare) ou limite do PHP descartando campos. As configurações anteriores foram mantidas.</p>
+		</div>
+	<?php endif; ?>
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" id="hub-captador-form" style="margin-top: 20px;">
 		<input type="hidden" name="action" value="hub_save_lead_collector">
 		<?php wp_nonce_field( 'hub_lead_collector_nonce', 'hub_nonce' ); ?>
@@ -165,6 +175,36 @@ if ( ! empty( $settings['attendant_avatar_id'] ) ) {
 			</table>
 		</div>
 
+		<!-- 3b. REDIRECIONAMENTO PARA O WHATSAPP -->
+		<?php
+		$forms_settings = get_option( 'hub_settings', array() );
+		$forms_settings = isset( $forms_settings['forms'] ) && is_array( $forms_settings['forms'] ) ? $forms_settings['forms'] : array();
+		$whatsapp       = isset( $forms_settings['whatsapp'] ) ? $forms_settings['whatsapp'] : '';
+		$whatsapp_msg   = isset( $forms_settings['whatsapp_msg'] ) ? $forms_settings['whatsapp_msg'] : 'Olá, sou {nome} e gostaria de saber mais sobre os serviços.';
+		?>
+		<div class="card" style="margin-top: 0; padding: 20px; border-radius: 6px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+			<h2 style="font-size: 15px; margin-top: 0; border-bottom: 1px solid #ccd0d4; padding-bottom: 8px; font-weight: 600;">
+				<span class="dashicons dashicons-whatsapp" style="vertical-align: middle; margin-right: 4px;"></span> Redirecionamento do Atendente (WhatsApp)
+			</h2>
+			<p class="description" style="margin-top: 10px;">Define para qual WhatsApp o visitante é levado ao final do atendimento.</p>
+
+			<table class="form-table" style="margin-top: 10px;">
+				<tr>
+					<th scope="row"><label for="form_whatsapp">WhatsApp de Destino</label></th>
+					<td>
+						<input type="text" name="forms[whatsapp]" id="form_whatsapp" class="regular-text" value="<?php echo esc_attr( $whatsapp ); ?>" placeholder="Ex: 5511999999999" pattern="\d+" title="Apenas números">
+						<p class="description">Somente números, incluindo o código do país (ex: 55).</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="form_whatsapp_msg">Mensagem Automática</label></th>
+					<td>
+						<input type="text" name="forms[whatsapp_msg]" id="form_whatsapp_msg" class="large-text" value="<?php echo esc_attr( $whatsapp_msg ); ?>">
+						<p class="description">Variáveis permitidas: <code>{nome}</code></p>
+					</td>
+				</tr>
+			</table>
+		</div>
 		<!-- 4. CONSTRUTOR DE FLUXO DE PERGUNTAS -->
 		<div class="card" style="margin-top: 0; padding: 20px; border-radius: 6px; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
 			<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccd0d4; padding-bottom: 10px;">
@@ -203,7 +243,26 @@ if ( ! empty( $settings['attendant_avatar_id'] ) ) {
 		</div>
 
 	</form>
-</div>
+
+	<?php
+	// Diagnóstico do salvamento: o que está no banco x o que o WordPress está lendo agora (revela cache de objetos desatualizado).
+	global $wpdb;
+	$diag_raw   = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", 'hub_lead_collector' ) );
+	$diag_db    = null === $diag_raw ? array() : maybe_unserialize( $diag_raw );
+	$diag_db    = is_array( $diag_db ) ? $diag_db : array();
+	$diag_cache = wp_using_ext_object_cache();
+	$diag_same  = null === $diag_raw || ( ( $diag_db['attendant_name'] ?? null ) === $settings['attendant_name'] ) && ( ! empty( $diag_db['enabled'] ) === ! empty( $settings['enabled'] ) ) && ( (int) ( $diag_db['attendant_avatar_id'] ?? 0 ) === (int) $settings['attendant_avatar_id'] );
+	?>
+	<p style="color: #646970; font-size: 12px; margin: 0 0 30px;">
+		Diagnóstico do salvamento:
+		configurações no banco: <strong><?php echo null === $diag_raw ? 'ainda não gravadas (valendo os padrões)' : 'gravadas'; ?></strong> ·
+		cache de objetos persistente: <strong><?php echo $diag_cache ? 'sim' : 'não'; ?></strong> ·
+		codificação da tabela de opções: <strong><?php echo esc_html( (string) $wpdb->get_col_charset( $wpdb->options, 'option_value' ) ); ?></strong><?php echo \Hub\Core\Services\LeadCollectorService::db_supports_4byte() ? '' : ' (sem emojis de 4 bytes: eles são guardados como entidades)'; ?> ·
+		<code>max_input_vars</code>: <strong><?php echo absint( ini_get( 'max_input_vars' ) ); ?></strong>
+		<?php if ( ! $diag_same ) : ?>
+			· <strong style="color: #b32d2e;">o WordPress está lendo um valor diferente do que está no banco (cache desatualizado): limpe o cache da hospedagem/do plugin de cache.</strong>
+		<?php endif; ?>
+	</p></div>
 
 <!-- MODAL DE PREVIEW DO CAPTADOR NO ADMIN -->
 <div id="hub-preview-modal" style="display: none; position: fixed; z-index: 1000000; left: 0; top: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); align-items: center; justify-content: center;">

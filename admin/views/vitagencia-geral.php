@@ -105,35 +105,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</form>
 	</div>
 
-	<!-- CARD: PIPELINE VITZAP -->
-	<div class="hub-card" style="margin-top: 20px;">
-		<h2>Pipeline / Indicadores Comerciais</h2>
-		<?php $crm_enabled = isset( $settings['crm_enabled'] ) ? ! empty( $settings['crm_enabled'] ) : false; ?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<?php wp_nonce_field( 'hub_save_vitagencia', 'hub_nonce' ); ?>
-			<input type="hidden" name="action" value="hub_save_vitagencia">
-			<input type="hidden" name="vitagencia_tab" value="geral">
-			<input type="hidden" name="hub_crm_toggle" value="1">
-
-			<table class="form-table">
-				<tr>
-					<th scope="row">Pipeline integrado ao VitZap</th>
-					<td>
-						<label for="hub_crm_enabled">
-							<input type="checkbox" name="hub_crm_enabled" id="hub_crm_enabled" value="1" <?php checked( $crm_enabled ); ?>>
-							Ativar Pipeline integrado ao VitZap
-						</label>
-						<p class="description">Exibe no WordPress os indicadores e o pipeline sincronizado pelo VitZap. As ações comerciais continuam sendo realizadas no VitZap.</p>
-					</td>
-				</tr>
-			</table>
-
-			<p class="submit">
-				<button type="submit" class="button button-primary">Salvar Pipeline</button>
-			</p>
-		</form>
-	</div>
-
 	<!-- CARD: INTEGRAÇÃO VITADS -->
 	<div class="hub-card" style="margin-top: 20px;">
 		<h2>Integração com VitAds</h2>
@@ -154,13 +125,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<table class="form-table">
 				<tr>
-					<th scope="row">Marketing e Pipeline</th>
+					<th scope="row">Integração</th>
 					<td>
-						<label for="marketing_pipeline_enabled">
-							<input type="checkbox" name="marketing_pipeline_enabled" id="marketing_pipeline_enabled" value="1" <?php checked( $marketing_on ); ?>>
-							Ativar Marketing e Pipeline
+						<label for="vitads_enabled">
+							<input type="checkbox" name="vitads_enabled" id="vitads_enabled" value="1" <?php checked( $vitads_enabled || $marketing_on ); ?>>
+							Ativar integração VitAds, VitZap e Pipeline
 						</label>
-						<p class="description">Ative esta opção quando este site participar de campanhas de marketing e do acompanhamento comercial de leads.</p>
+						<p class="description">Uma única chave liga o envio de conversões ao VitAds, o Marketing e Pipeline e o Pipeline integrado ao VitZap neste site. As ações comerciais continuam sendo realizadas no VitZap.</p>
 						<?php if ( 'connected' === $marketing['state'] ) : ?>
 							<p>
 								<strong>● VitAds conectado</strong><br>
@@ -169,15 +140,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 								Meta Ads: <?php echo ! empty( $marketing['meta_ads'] ) ? 'Configurado' : 'Não configurado'; ?>
 							</p>
 						<?php endif; ?>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">VitAds</th>
-					<td>
-						<label for="vitads_enabled">
-							<input type="checkbox" name="vitads_enabled" id="vitads_enabled" value="1" <?php checked( $vitads_enabled ); ?>>
-							Ativar integração com VitAds
-						</label>
 					</td>
 				</tr>
 				<tr>
