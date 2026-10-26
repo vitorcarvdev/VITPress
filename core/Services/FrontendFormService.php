@@ -37,6 +37,10 @@ class FrontendFormService {
 	 * Renderiza o HTML do formulário quando o shortcode [hub_form] for chamado.
 	 */
 	public function render_form_shortcode( $atts ) {
+		// A captação é do Atendente: o formulário independente não é exibido (o shortcode segue registrado).
+		if ( ! LeadCapturePolicy::standalone_forms_allowed() ) {
+			return '';
+		}
 		// CSS e JS Inline para manter a simplicidade e portabilidade do shortcode
 		ob_start();
 		?>
@@ -226,6 +230,14 @@ class FrontendFormService {
 	 * @return \WP_REST_Response
 	 */
 	public function handle_rest_submission( \WP_REST_Request $request ) {
+		// Bloqueio no ponto de captação (não só na interface): nada é gravado, enviado ou registrado.
+		if ( ! LeadCapturePolicy::standalone_forms_allowed() ) {
+			return new \WP_REST_Response( array(
+				'success' => false,
+				'code'    => LeadCapturePolicy::BLOCKED_CODE,
+				'message' => LeadCapturePolicy::BLOCKED_MESSAGE,
+			), 410 );
+		}
 		try {
 			return $this->process_rest_submission( $request );
 		} catch ( \Throwable $e ) {
@@ -329,6 +341,8 @@ class FrontendFormService {
 		if ( $inserted ) {
 			$lead_id = Database::db()->insert_id;
 			Database::log_history( 'lead', $lead_id, 'created', 'Lead capturado automaticamente pelo formulário do site.' );
+			// Vínculo com o pipeline do VitAds ('' se indisponível/ambíguo); segue no contexto do FORM_SUBMIT.
+			$shared_contact_id = \Hub\Core\Services\Integrations\PipelineContactSync::register_lead( $lead_id );
 			error_log( '[HUB FORM] persistence_ok' );
 			
 			// Dispara evento de conversão. Falha de integração não pode derrubar a resposta do visitante.
@@ -354,7 +368,7 @@ class FrontendFormService {
 				$body .= "Nome: {$name}\n";
 				$body .= "E-mail: {$email}\n";
 				$body .= "Telefone: {$phone}\n\n";
-				$body .= "Acesse o Hub para mais detalhes.";
+				$body .= "Acesse o VitPress para mais detalhes.";
 				try {
 					$sent = wp_mail( $receive_email, $subject, $body );
 					error_log( '[HUB FORM] mail_service_' . ( $sent ? 'success' : 'fail' ) );
@@ -391,7 +405,9 @@ class FrontendFormService {
 			
 			$redirect_url = home_url( '/obrigado-contato?hub_token=' . $token );
 
-			VitAdsEventService::send_form_submit( $lead_id, $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data, $data['ad_user_data_consent'] ) );
+			$vitads_context = $this->vitads_lead_context( $request, $name, $email, $phone, $tracking_data, $data['ad_user_data_consent'] );
+			$vitads_context['shared_contact_id'] = $shared_contact_id;
+			VitAdsEventService::send_form_submit( $lead_id, $vitads_context );
 
 			return new \WP_REST_Response( array( 
 				'success' => true, 

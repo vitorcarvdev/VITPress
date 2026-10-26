@@ -3,7 +3,7 @@
  * admin/views/atendente.php
  * Tela de Configuração do Atendente Virtual (Captador de Leads).
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

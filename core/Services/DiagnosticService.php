@@ -26,7 +26,7 @@ class DiagnosticService {
 	}
 
 	/**
-	 * Adiciona o menu do Hub na Top Bar.
+	 * Adiciona o menu do VitPress na Top Bar.
 	 */
 	public function add_admin_bar_menu( $wp_admin_bar ) {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -374,7 +374,7 @@ class DiagnosticService {
 			'recommended' => 'Backup Diário',
 			'can_fix'     => true,
 			'fix_label'   => 'Executar Backup Agora',
-			'desc'        => 'O Hub pode fazer backups diários. Este alerta indica caso não estejam configurados ou não estejam em dia.',
+			'desc'        => 'O VitPress pode fazer backups diários. Este alerta indica caso não estejam configurados ou não estejam em dia.',
 		);
 
 		// 8. Cron (10 pontos)
@@ -430,7 +430,7 @@ class DiagnosticService {
 			'recommended' => 'SMTP Amazon SES ativo',
 			'can_fix'     => $ses,
 			'fix_label'   => 'Testar Amazon SES',
-			'desc'        => 'Configuração via Amazon SES garante 99% de entrega para e-mails institucionais enviados pelo Hub.',
+			'desc'        => 'Configuração via Amazon SES garante 99% de entrega para e-mails institucionais enviados pelo VitPress.',
 		);
 
 		update_option( 'hub_diagnostic_last_score', $score );
@@ -818,7 +818,7 @@ class DiagnosticService {
 		// 1. Limpar Transients Expirados
 		$wpdb->query( "DELETE a, b FROM {$wpdb->options} a, {$wpdb->options} b WHERE a.option_name LIKE '\_transient\_%' AND a.option_name NOT LIKE '\_transient\_timeout\_%' AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) ) AND b.option_value < " . time() );
 
-		// 2. Limpar Cache do Hub
+		// 2. Limpar Cache do VitPress
 		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'hub_cache_%'" );
 
 		// 3. Otimizar Tabelas
@@ -827,7 +827,7 @@ class DiagnosticService {
 			$wpdb->query( "OPTIMIZE TABLE `$table`" );
 		}
 
-		Database::log_history( 'system', 0, 'update', 'Banco de dados otimizado (Transients limpos, Hub cache limpo e OPTIMIZE executado).' );
+		Database::log_history( 'system', 0, 'update', 'Banco de dados otimizado (Transients limpos, VitPress cache limpo e OPTIMIZE executado).' );
 
 		wp_send_json_success( array( 'message' => "Configuração aplicada com sucesso. Itens alterados: Limpeza de Transients, Limpeza de Cache local e Otimização de Tabelas (Overhead reduzido a 0).\nNenhum erro encontrado." ) );
 	}

@@ -8,7 +8,7 @@ $privacy = isset( $settings['privacy'] ) ? $settings['privacy'] : array();
 $banner_enabled = ! empty( $privacy['banner_enabled'] );
 $banner_text = \Hub\Core\Services\PrivacyService::message( $privacy['banner_text'] ?? '' );
 
-// Sincroniza a política do Hub com a oficial do WordPress
+// Sincroniza a política do VitPress com a oficial do WordPress
 $wp_policy_page = get_option('wp_page_for_privacy_policy');
 $policy_page = $wp_policy_page ? intval($wp_policy_page) : (isset( $privacy['policy_page'] ) ? intval( $privacy['policy_page'] ) : 0);
 

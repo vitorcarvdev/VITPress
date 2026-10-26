@@ -1,5 +1,5 @@
 /**
- * JavaScript Nativo para o Plugin Hub (WordPress Admin)
+ * JavaScript Nativo para o Plugin VitPress (WordPress Admin)
  */
 (function($) {
 	"use strict";

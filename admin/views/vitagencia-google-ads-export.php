@@ -58,7 +58,7 @@ $conversion_name = ! empty( $offline_settings['conversion_name'] ) ? $offline_se
 		<h4 style="margin: 0 0 10px 0;">Configuração Atual da Conversão</h4>
 		<p style="margin: 0;">Nome da ação de conversão: <strong><?php echo esc_html( $conversion_name ); ?></strong></p>
 		<p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">
-			<em>Aviso: Antes de gerar o CSV, certifique-se de que a ação "<?php echo esc_html( $conversion_name ); ?>" foi criada no Google Ads com a opção "Importar de cliques". O Hub não consegue validar isso de forma offline.</em>
+			<em>Aviso: Antes de gerar o CSV, certifique-se de que a ação "<?php echo esc_html( $conversion_name ); ?>" foi criada no Google Ads com a opção "Importar de cliques". O VitPress não consegue validar isso de forma offline.</em>
 		</p>
 	</div>
 
@@ -119,7 +119,7 @@ $conversion_name = ! empty( $offline_settings['conversion_name'] ) ? $offline_se
 			<li>Acesse sua conta do Google Ads.</li>
 			<li>No menu superior, vá em <strong>Metas</strong> > <strong>Conversões</strong> > <strong>Uploads</strong>.</li>
 			<li>Clique no botão azul de mais (+) e selecione a aba <strong>Uploads de conversão</strong>.</li>
-			<li>Faça o upload do arquivo CSV gerado pelo Hub.</li>
+			<li>Faça o upload do arquivo CSV gerado pelo VitPress.</li>
 			<li>Clique em <strong>Aplicar</strong>. O Google exibirá os resultados e quais conversões foram contabilizadas.</li>
 		</ol>
 	</div>

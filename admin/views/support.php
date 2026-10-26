@@ -94,7 +94,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<li>Empresa: <em><?php echo esc_html( get_bloginfo( 'name' ) ); ?></em> (<?php echo esc_html( home_url() ); ?>)</li>
 					<li>Responsável: <em><?php echo esc_html( wp_get_current_user()->display_name ); ?></em></li>
 					<li>Perfil Escolhido: <em><?php echo esc_html( $profile ? $profile->get_name() : 'Não definido' ); ?></em></li>
-					<li>Versões do Sistema: Hub v<?php echo esc_html( HUB_VERSION ); ?>, WordPress v<?php echo esc_html( $GLOBALS['wp_version'] ); ?>, PHP v<?php echo esc_html( PHP_VERSION ); ?></li>
+					<li>Versões do Sistema: VitPress v<?php echo esc_html( HUB_VERSION ); ?>, WordPress v<?php echo esc_html( $GLOBALS['wp_version'] ); ?>, PHP v<?php echo esc_html( PHP_VERSION ); ?></li>
 				</ul>
 			</div>
 

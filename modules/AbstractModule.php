@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Classe Abstrata Base para os Módulos do Hub.
+ * Classe Abstrata Base para os Módulos do VitPress.
  */
 abstract class AbstractModule {
 

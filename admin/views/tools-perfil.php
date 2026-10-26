@@ -78,7 +78,7 @@ if ( $notice_success ) : ?>
 					<?php if ( ! $is_licensed ) : ?>
 						<p class="description" style="color: #d63638;"><strong>Atenção:</strong> O uso do CRM requer uma licença ativa ou autorizada no menu Área VitAgência.</p>
 					<?php else : ?>
-						<p class="description">Desmarque se o cliente for utilizar o Hub apenas para funções básicas (ex: Privacidade e Formulários simples).</p>
+						<p class="description">Desmarque se o cliente for utilizar o VitPress apenas para funções básicas (ex: Privacidade e Formulários simples).</p>
 					<?php endif; ?>
 				</td>
 			</tr>

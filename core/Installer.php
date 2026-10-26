@@ -78,6 +78,7 @@ class Installer {
 			pipeline_synced_at datetime NULL,
 			stage_updated_at datetime NULL,
 			stage_source varchar(30) NULL,
+			shared_contact_id varchar(36) NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
 			PRIMARY KEY  (id),
@@ -259,6 +260,10 @@ class Installer {
 		$stage_source = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'stage_source'" );
 		if ( empty( $stage_source ) ) {
 			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN stage_source varchar(30) NULL" );
+		}
+		$shared_contact = $wpdb->get_results( "SHOW COLUMNS FROM {$table_leads} LIKE 'shared_contact_id'" );
+		if ( empty( $shared_contact ) ) {
+			$wpdb->query( "ALTER TABLE {$table_leads} ADD COLUMN shared_contact_id varchar(36) NULL" );
 		}
 		dbDelta( $sql_clients );
 		dbDelta( $sql_events );

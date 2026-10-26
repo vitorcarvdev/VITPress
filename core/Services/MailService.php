@@ -121,8 +121,8 @@ class MailService {
 	 * @return bool|\WP_Error Retorna true em caso de sucesso, ou WP_Error em caso de falha.
 	 */
 	public function send_test_email( $to ) {
-		$subject = 'Hub - Teste de E-mail Amazon SES';
-		$message = "Este é um e-mail de teste gerado pelo Hub.\nSe você recebeu este e-mail, sua configuração do Amazon SES está correta.";
+		$subject = 'VitPress - Teste de E-mail Amazon SES';
+		$message = "Este é um e-mail de teste gerado pelo VitPress.\nSe você recebeu este e-mail, sua configuração do Amazon SES está correta.";
 		
 		// Usa um buffer e uma classe anônima para capturar o log detalhado do PHPMailer
 		global $phpmailer;

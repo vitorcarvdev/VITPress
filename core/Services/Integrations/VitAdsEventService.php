@@ -47,6 +47,20 @@ class VitAdsEventService {
 	}
 
 	/**
+	 * UUID do contato compartilhado (formato 8-4-4-4-12) em minúsculas; '' se ausente ou inválido.
+	 * O VitAds recusa (422) um shared_contact_id mal formado, então nunca se envia um valor que não passe aqui.
+	 *
+	 * @param mixed $value
+	 */
+	public static function normalize_shared_contact_id( $value ) {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+		$id = strtolower( trim( $value ) );
+		return 1 === preg_match( '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id ) ? $id : '';
+	}
+
+	/**
 	 * Só granted/denied explícitos; ausente ou fora do vocabulário vira unknown.
 	 */
 	public static function normalize_consent( $value ) {
@@ -144,6 +158,12 @@ class VitAdsEventService {
 			if ( '' !== $value ) {
 				$payload[ $key ] = $value;
 			}
+		}
+
+		// Vínculo com o contato do pipeline, quando o registro do lead o devolveu. Ausente/inválido: o campo não vai.
+		$shared_contact_id = self::normalize_shared_contact_id( $lead['shared_contact_id'] ?? null );
+		if ( '' !== $shared_contact_id ) {
+			$payload['shared_contact_id'] = $shared_contact_id;
 		}
 
 		$response = wp_remote_post(

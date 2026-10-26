@@ -1,5 +1,5 @@
 /**
- * Hub Visitor Tracking Script (Vanilla JS - Zero Dependencies)
+ * VitPress Visitor Tracking Script (Vanilla JS - Zero Dependencies)
  * Captura parÃ¢metros de UTMs, IDs de cliques, referenciador, visualizaÃ§Ãµes de pÃ¡gina e dados estruturados da primeira visita.
  */
 (function() {
@@ -60,15 +60,16 @@
 		return url.slice(0, queryAt) + (kept.length ? '?' + kept.join('&') : '') + hash;
 	}
 
-	function processParams(paramsList) {
-		if (!getCookie('hub_session_id')) {
-			paramsList.forEach(function(param) {
-				var val = getQueryParam(param);
-				if (val) {
-					setCookie('hub_first_touch_' + param, val, 30);
-				}
-			});
-		}
+	function processParams(paramsList, firstTouchByCookie) {
+		// O cookie de sessão já existe quando os parâmetros são processados (o rastreador o cria antes) e, para
+		// identificadores de clique, o consentimento pode chegar depois. O primeiro toque é, portanto, o primeiro valor
+		// observado de cada parâmetro, não "a sessão é nova".
+		paramsList.forEach(function(param) {
+			var val = getQueryParam(param);
+			if (val && !getCookie('hub_first_touch_' + param)) {
+				setCookie('hub_first_touch_' + param, val, 30);
+			}
+		});
 		paramsList.forEach(function(param) {
 			var val = getQueryParam(param);
 			if (val) {
@@ -100,7 +101,7 @@
 		function initMarketingTracker() {
 		if (marketingInitialized) return;
 		marketingInitialized = true;
-		processParams(marketingParams);
+		processParams(marketingParams, true);
 		loadMetaPixel();
 	}
 
@@ -125,7 +126,7 @@
 			if (hubTrackerConfig.meta_debug) {
 				console.warn('[HUB META] AVISO: Existe uma implementação anterior do Meta Pixel carregada na página. Ela precisa ser removida.');
 			}
-			// Como o Pixel já existe, o Hub não deve recriar o snippet base, mas apenas tentar usar a instância existente.
+			// Como o Pixel já existe, o VitPress não deve recriar o snippet base, mas apenas tentar usar a instância existente.
 		} else {
 			// Injeta a biblioteca do Meta Pixel
 			!function(f,b,e,v,n,t,s)

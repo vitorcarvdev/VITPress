@@ -1,11 +1,11 @@
 <?php
 /**
- * Hub Plugin Configuration File
+ * VitPress Plugin Configuration File
  * 
- * Este arquivo armazena configurações técnicas e internas do plugin Hub.
+ * Este arquivo armazena configurações técnicas e internas do plugin VitPress.
  * Alterado manualmente pelo desenvolvedor / equipe da agência.
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 return array(
 	// Informações de versão e infraestrutura
-	'version'             => '1.9.1',
+	'version'             => '1.9.2',
 	'crm_enabled'         => false,
 	'vcsis_connect_url'   => 'https://connect.vcsis.com.br/api/v1/updates/hub',
 	'vcsis_connect_token' => '',

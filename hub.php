@@ -2,8 +2,8 @@
 /**
  * Plugin Name: VitPress
  * Plugin URI: https://vcsis.com.br/hub
- * Description: VitPress — central de gestão com formulários, Pipeline, conversões, indicadores, automações, suporte e ferramentas.
- * Version: 1.9.1
+ * Description: VitPress — central de gestão com atendente virtual, Pipeline, conversões, indicadores, automações, suporte e ferramentas.
+ * Version: 1.9.2
  * Author: VitAgência + VCSIS
  * Author URI: https://vitagencia.com.br
  * Text Domain: hub
@@ -11,7 +11,7 @@
  * Requires at least: 5.8
  * Requires PHP: 8.2
  *
- * @package Hub
+ * @package VitPress
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // 1. Definição das Constantes Principais
-define( 'HUB_VERSION', '1.9.1' );
+define( 'HUB_VERSION', '1.9.2' );
 define( 'HUB_FILE', __FILE__ );
 define( 'HUB_PATH', plugin_dir_path( __FILE__ ) );
 define( 'HUB_URL', plugin_dir_url( __FILE__ ) );
@@ -52,7 +52,7 @@ function hub_clear_legacy_google_ads_polling() {
 add_action( 'init', 'hub_clear_legacy_google_ads_polling' );
 
 /**
- * Bootstrapping da Aplicação Hub Core
+ * Bootstrapping da Aplicação VitPress Core
  */
 function hub_init() {
 	\Hub\Core\Installer::maybe_upgrade();

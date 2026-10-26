@@ -82,7 +82,7 @@ class SupportModule extends AbstractModule {
 		$php_version  = PHP_VERSION;
 		$date_time    = current_time( 'd/m/Y H:i:s' );
 
-		$mail_body = "Um novo chamado de suporte foi aberto via Hub.\n\n";
+		$mail_body = "Um novo chamado de suporte foi aberto via VitPress.\n\n";
 		$mail_body .= "=== INFORMAÇÕES DO CHAMADO ===\n";
 		$mail_body .= "Setor: " . ( 'site' === $category ? 'Site / WordPress' : 'Marketing / Campanhas' ) . "\n";
 		$mail_body .= "Tipo do Atendimento: {$ticket_type}\n";
