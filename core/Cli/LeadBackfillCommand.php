@@ -56,7 +56,8 @@ class LeadBackfillCommand {
 	 */
 	public function __invoke( $args, $assoc_args ) {
 		if ( ! empty( $assoc_args['status'] ) ) {
-			$status = LeadBackfillService::status();
+			$status                = LeadBackfillService::status();
+			$status['automatic']   = \Hub\Core\Services\Integrations\HistoricalImport::status();
 			\WP_CLI::log( wp_json_encode( $status, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) );
 			return;
 		}

@@ -1,6 +1,30 @@
 # Importação dos leads antigos para o VitAds (VitPress 1.9.4)
 
-Comando manual, nunca automático: `wp vitpress backfill-leads`. Não existe botão, WP-Cron nem rota pública para isso.
+## Importação histórica automática (padrão, sem intervenção)
+Ao atualizar/ativar o VitPress 1.9.4 com a integração VitAds configurada, os leads antigos são importados **uma única vez** para o pipeline do VitAds, sozinhos, pelo WP-Cron. Não há tela, WP-CLI, SSH nem cPanel envolvidos. A sincronização normal (novos leads, etapas a cada 5 min) continua independente.
+
+**Quando começa**
+- Site com a integração já configurada: no primeiro ciclo do cron depois da atualização (cerca de 1 minuto depois do primeiro acesso ao site; a ativação em si não importa nada).
+- Site sem integração (ou token ainda não colocado): fica "pending" e começa sozinho assim que a integração é salva em Configurações → VitAds (o salvamento antecipa o ciclo em ~30 s).
+
+**Como roda:** a cada ciclo (`hub_historical_import_tick`, intervalo `hub_five_minutes` do plugin, e um ciclo extra ~1 min depois enquanto ainda houver leads) processa até 10 lotes de 50 leads por id, no máximo ~20 s, com timeout HTTP de 10 s, e devolve o controle. Nenhuma requisição fica aberta durante a importação inteira. Uma base de 50 mil leads leva da ordem de 1 a 2 h de cron ativo.
+
+**Estados** (`hub_historical_import`, option sem autoload): `pending` (aguardando integração), `running`, `failed_recoverable` (com `last_error`, `attempts` e `next_retry_at`) e `completed`. O cursor fica em `hub_historical_import_cursor` e é gravado a cada lote.
+
+**Importação única:** quando o último lote é processado grava-se `hub_historical_import_done` (data UTC, autoload) e `completed`; o agendamento e o cursor são removidos. Depois disso **nada reinicia a importação**: nem desativar/reativar o plugin, nem atualizar o plugin, nem trocar o token (para reimportar de propósito use o comando manual abaixo). Reativar antes de concluir só retoma do cursor.
+
+**Falhas e retomada:** rede/5xx, 404 (VitAds ainda sem a rota), 401/403, 409, 503 e erro interno viram `failed_recoverable` com espera crescente (5 min a 6 h, conforme o tipo; 404 espera 1 h; 401/403 espera 6 h) e retomam do cursor, sem duplicar: a rota do VitAds é idempotente, então reenviar um lote cuja resposta se perdeu apenas reconhece o que já foi criado. Salvar a integração de novo libera a espera. Erro ao ler a tabela de leads nunca conclui a importação. Se o token for trocado no meio da importação (outro cliente), ela recomeça do primeiro lead para o novo cliente. Uma trava (`hub_backfill_lock`, 15 min) impede dois processos no mesmo lote.
+
+**O que não faz:** não gera conversão, venda, evento, entrega ou interação; não altera etapas locais; não sobrescreve o que o VitAds já tem; não inventa datas (lead fora de Apresentação sem data da etapa é ignorado; em Apresentação usa a data de criação); telefone repetido entre leads é recusado como ambíguo (fica em `hub_backfill_failures`, só id e código, para revisão). Não grava nome, telefone, e-mail, token nem endpoint no estado, nos logs ou nas falhas.
+
+**Limitações reais do WP-Cron:** só roda quando o site recebe visitas (ou com `wp-cron.php` chamado por um cron do sistema). Sites com `DISABLE_WP_CRON` sem cron do sistema não importam nem sincronizam etapas (já era assim para a sincronização do pipeline). Hospedagens que limitam o tempo de execução abaixo de ~30 s podem interromper um lote: a trava expira em 15 min e o ciclo seguinte retoma do cursor.
+
+**Acompanhar (opcional):** `wp vitpress backfill-leads --status` mostra o estado automático em `automatic` (sem dados pessoais).
+
+---
+
+# Importação manual (ferramenta avançada)
+Comando opcional, para reimportar de propósito, importar um intervalo (`--after-id`) ou simular antes (dry-run). Não é necessário para o funcionamento normal. Usa um cursor próprio e a mesma trava do fluxo automático.
 Serve para levar ao pipeline do portal os leads que chegaram antes da integração (ou antes do perfil existir), sem duplicar
 contatos e **sem gerar nenhuma conversão**.
 
