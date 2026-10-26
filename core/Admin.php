@@ -44,7 +44,6 @@ class Admin {
 		add_action( 'admin_init', array( $this, 'ensure_vcsis_capabilities' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu_structure' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'admin_post_hub_save_profile', array( $this, 'handle_save_profile' ) );
 		
 		add_filter( 'admin_footer_text', array( $this, 'render_admin_footer' ) );
 		add_action( 'admin_notices', array( '\Hub\Core\Services\Integrations\VitAdsMarketing', 'render_admin_notice' ) );
@@ -76,57 +75,40 @@ class Admin {
 
 		$icon_slug = 'dashicons-image-filter';
 
-		$main_slug = 'hub';
-		if ( $profile_manager->is_profile_selected() ) {
-			$main_slug = $module_manager->is_active('indicators') ? 'hub-indicadores' : 'hub-support';
-		}
+		$main_slug = $module_manager->is_active( 'indicators' ) ? 'hub-indicadores' : 'hub-support';
 
-		// Menu Principal: VitPress
+		// Menu Principal: VitPress. Não há mais tela de escolha de perfil ao ativar: a área de atuação é escolhida na aba Marketing
+		// da Área VitAgência e, até lá, vale o perfil padrão.
 		add_menu_page(
 			'VitPress',
 			'VitPress',
 			'manage_options',
 			$main_slug,
-			$profile_manager->is_profile_selected() ? '' : array( $this, 'render_onboarding_page' ),
+			'',
 			$icon_slug,
 			25
 		);
 
-		if ( $profile_manager->is_profile_selected() ) {
-			if ( $module_manager->is_active('indicators') ) {
-				// Renomeia o primeiro submenu gerado automaticamente para 'Indicadores'
-				add_submenu_page(
-					$main_slug,
-					'Indicadores',
-					'Indicadores',
-					'manage_options',
-					$main_slug,
-					array( $module_manager->get_module('indicators'), 'render' )
-				);
-			} else {
-				// Se indicadores não existir, o primeiro submenu é o Suporte
-				add_submenu_page(
-					$main_slug,
-					'Pedir Suporte',
-					'Pedir Suporte',
-					'manage_options',
-					$main_slug,
-					array( $module_manager->get_module('support'), 'render' )
-				);
-			}
-		}
-
-		// Se o perfil ainda não foi selecionado, redireciona o fluxo para o Onboarding
-		if ( ! $profile_manager->is_profile_selected() ) {
+		if ( $module_manager->is_active( 'indicators' ) ) {
+			// Renomeia o primeiro submenu gerado automaticamente para 'Indicadores'
 			add_submenu_page(
-				'hub',
-				'Boas-vindas ao VitPress',
-				'Escolha seu Perfil',
+				$main_slug,
+				'Indicadores',
+				'Indicadores',
 				'manage_options',
-				'hub',
-				array( $this, 'render_onboarding_page' )
+				$main_slug,
+				array( $module_manager->get_module( 'indicators' ), 'render' )
 			);
-			return;
+		} else {
+			// Se indicadores não existir, o primeiro submenu é o Suporte
+			add_submenu_page(
+				$main_slug,
+				'Pedir Suporte',
+				'Pedir Suporte',
+				'manage_options',
+				$main_slug,
+				array( $module_manager->get_module( 'support' ), 'render' )
+			);
 		}
 
 		// Submenu 2: Pipeline (Visualização Somente Leitura)
@@ -140,6 +122,16 @@ class Admin {
 				array( $module_manager->get_module( 'pipeline' ), 'render' )
 			);
 		}
+
+		// Backup e Restauração: página própria no menu principal (antes era uma aba da área restrita).
+		add_submenu_page(
+			$main_slug,
+			'Backup e Restauração',
+			'Backup e Restauração',
+			'manage_options',
+			'hub-backup',
+			array( $this, 'render_backup_page' )
+		);
 
 		// Submenu 3: Atendente Virtual (Captador de Leads). Sem licença o item some do menu,
 		// mas a página continua registrada para bloquear o acesso direto com a mensagem padrão.
@@ -184,6 +176,18 @@ class Admin {
 	}
 
 	/**
+	 * Página Backup e Restauração.
+	 */
+	public function render_backup_page() {
+		if ( ! \Hub\Core\Services\BackupService::can_manage_backups() ) {
+			wp_die( 'Acesso negado.' );
+		}
+		echo '<div class="wrap hub-wrap"><h1><span class="dashicons dashicons-backup"></span> Backup e Restauração</h1>';
+		require_once HUB_PATH . 'admin/views/vitagencia-backup.php';
+		echo '</div>';
+	}
+
+	/**
 	 * Retorna o título personalizado do submenu de acordo com o perfil ativo.
 	 *
 	 * @param string                                   $module_id
@@ -218,35 +222,6 @@ class Admin {
 	 */
 	public function render_main_page() {
 		// Mantido apenas para compatibilidade legada se necessário
-	}
-
-	/**
-	 * Renderiza a tela de Boas-vindas / Escolha de Perfil.
-	 */
-	public function render_onboarding_page() {
-		$profiles = ProfileManager::get_instance()->get_profiles();
-		require_once HUB_PATH . 'templates/onboarding.php';
-	}
-
-	/**
-	 * Processa o envio do formulário de escolha de perfil.
-	 */
-	public function handle_save_profile() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Acesso negado.' );
-		}
-
-		check_admin_referer( 'hub_save_profile_nonce', 'hub_nonce' );
-
-		$selected_profile = isset( $_POST['profile_type'] ) ? sanitize_key( $_POST['profile_type'] ) : '';
-
-		if ( ProfileManager::get_instance()->set_active_profile( $selected_profile ) ) {
-			wp_safe_redirect( admin_url( 'admin.php?page=hub-indicadores' ) );
-			exit;
-		}
-
-		wp_safe_redirect( admin_url( 'admin.php?page=hub&error=invalid_profile' ) );
-		exit;
 	}
 
 	/**

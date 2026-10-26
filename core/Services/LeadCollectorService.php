@@ -28,6 +28,9 @@ class LeadCollectorService {
 		// Enqueue scripts & styles no frontend somente se o captador estiver ativo
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
 
+		// Páginas antigas do formulário (ex.: /novo-lead/) passam a abrir o Atendente na página inicial
+		add_action( 'template_redirect', array( $this, 'redirect_legacy_lead_page' ), 1 );
+
 		// Renderiza o container no footer
 		add_action( 'wp_footer', array( $this, 'render_collector_container' ) );
 
@@ -35,6 +38,89 @@ class LeadCollectorService {
 		add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
 	}
 
+	/**
+	 * O formulário independente (/novo-lead/) foi substituído pelo Atendente. Os links e anúncios que ainda apontam para
+	 * essa página são levados para a página inicial com a âncora #atendente (que abre o Atendente), mantendo a query
+	 * string inteira (gclid, utm_*, etc.) para não perder a atribuição.
+	 */
+	public function redirect_legacy_lead_page() {
+		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || isset( $_GET['preview'] ) ) {
+			return;
+		}
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : 'GET';
+		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) ) {
+			return;
+		}
+
+		$settings = self::get_settings();
+		if ( empty( $settings['enabled'] ) ) {
+			return; // Sem Atendente ativo não há para onde levar o visitante.
+		}
+		$front_id = (int) get_option( 'page_on_front' );
+		if ( $front_id && ! empty( $settings['excluded_pages'] ) && is_array( $settings['excluded_pages'] ) && in_array( $front_id, array_map( 'intval', $settings['excluded_pages'] ), true ) ) {
+			return; // O Atendente não aparece na página inicial.
+		}
+
+		$home_path = trim( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ), '/' );
+		$request   = trim( (string) wp_parse_url( (string) wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
+		if ( '' !== $home_path ) {
+			if ( $request === $home_path ) {
+				$request = '';
+			} elseif ( 0 === strpos( $request, $home_path . '/' ) ) {
+				$request = substr( $request, strlen( $home_path ) + 1 );
+			}
+		}
+		$legacy = array_map( 'strtolower', (array) apply_filters( 'hub/legacy_lead_form_paths', array( 'novo-lead' ) ) );
+		if ( '' === $request || ! in_array( strtolower( rawurldecode( $request ) ), $legacy, true ) ) {
+			return;
+		}
+
+		$query  = isset( $_SERVER['QUERY_STRING'] ) ? preg_replace( '/[\x00-\x1F\x7F#]/', '', (string) wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
+		$target = home_url( '/' ) . ( '' !== $query ? '?' . $query : '' ) . '#atendente';
+		wp_safe_redirect( $target, 302 );
+		exit;
+	}
+	/**
+	 * Emojis têm 4 bytes em UTF-8. Bancos/tabelas antigos criados como "utf8" (3 bytes) recusam o texto inteiro que
+	 * contenha um emoji e a gravação falha sem erro visível. Nesses bancos os emojis são guardados como entidades
+	 * (&#x1f44b;) e voltam a emojis na leitura; em utf8mb4 nada muda.
+	 */
+	public static function db_supports_4byte() {
+		global $wpdb;
+		return 'utf8mb4' === strtolower( (string) $wpdb->get_col_charset( $wpdb->options, 'option_value' ) );
+	}
+
+	public static function encode_emoji( $value ) {
+		if ( is_array( $value ) ) {
+			return array_map( array( __CLASS__, 'encode_emoji' ), $value );
+		}
+		if ( is_string( $value ) ) {
+			return preg_replace_callback(
+				'/[\x{10000}-\x{10FFFF}]/u',
+				static function ( $m ) {
+					return '&#x' . dechex( mb_ord( $m[0], 'UTF-8' ) ) . ';';
+				},
+				$value
+			);
+		}
+		return $value;
+	}
+
+	public static function decode_emoji( $value ) {
+		if ( is_array( $value ) ) {
+			return array_map( array( __CLASS__, 'decode_emoji' ), $value );
+		}
+		if ( is_string( $value ) && false !== strpos( $value, '&#x' ) ) {
+			return preg_replace_callback(
+				'/&#x([1-9a-f][0-9a-f]{4}|10[0-9a-f]{4});/i',
+				static function ( $m ) {
+					return mb_chr( hexdec( $m[1] ), 'UTF-8' );
+				},
+				$value
+			);
+		}
+		return $value;
+	}
 	/**
 	 * Retorna as configurações completas do Captador com valores padrão.
 	 */
@@ -83,7 +169,7 @@ class LeadCollectorService {
 			}
 		}
 
-		return $merged;
+		return self::decode_emoji( $merged );
 	}
 
 	/**
@@ -371,6 +457,12 @@ class LeadCollectorService {
 		global $wpdb;
 		$wpdb->suppress_errors( true );
 
+		// Tabela de leads em utf8 antigo (3 bytes) recusa a linha inteira se o visitante digitar um emoji: guarda como entidade.
+		if ( 'utf8mb4' !== strtolower( (string) $wpdb->get_col_charset( Database::table( 'leads' ), 'notes' ) ) ) {
+			$lead_data = self::encode_emoji( $lead_data );
+			$notes     = self::encode_emoji( $notes );
+		}
+
 		// 6. Contato já existente (mesmo telefone normalizado)? Reaproveita sem criar outro lead nem mudar a etapa.
 		$match   = $this->find_existing_lead( $phone );
 		$is_new  = true;
@@ -454,7 +546,7 @@ class LeadCollectorService {
 		$ref   = AttendantIntake::reference( $lead_id );
 		$wa    = AttendantIntake::whatsapp_url(
 			isset( $forms['whatsapp'] ) ? $forms['whatsapp'] : '',
-			AttendantIntake::whatsapp_message( isset( $forms['whatsapp_msg'] ) ? $forms['whatsapp_msg'] : '', 'Interessado do Site' === $name ? '' : $name, $ref )
+			AttendantIntake::whatsapp_message( isset( $forms['whatsapp_msg'] ) ? self::decode_emoji( $forms['whatsapp_msg'] ) : '', 'Interessado do Site' === $name ? '' : $name, $ref )
 		);
 
 		return new \WP_REST_Response( array_merge(

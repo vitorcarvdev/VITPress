@@ -227,6 +227,29 @@ class BackupFileMover {
 		return file_exists( $path ) || is_link( $path );
 	}
 
+	/**
+	 * Pastas de plugins que são outra cópia do próprio VitPress (o backup foi feito num site em que a pasta tinha outro
+	 * nome, como "VITPress"): reconhecidas pelo arquivo principal. Restaurá-las junto com a pasta em uso carregaria o
+	 * plugin duas vezes e derrubaria o site com erro fatal.
+	 *
+	 * @return string[] Nomes das pastas.
+	 */
+	public static function detect_plugin_copies( $plugins_dir, $main_file = 'hub.php', $signature = 'function activate_hub_plugin(' ) {
+		$found = array();
+		$items = is_dir( $plugins_dir ) ? scandir( $plugins_dir ) : false;
+		foreach ( (array) $items as $item ) {
+			$main = rtrim( $plugins_dir, '/\\' ) . '/' . $item . '/' . $main_file;
+			if ( '.' === $item || '..' === $item || is_link( $main ) || ! is_file( $main ) ) {
+				continue;
+			}
+			$head = (string) @file_get_contents( $main, false, null, 0, 32768 );
+			if ( false !== strpos( $head, $signature ) ) {
+				$found[] = $item;
+			}
+		}
+		return $found;
+	}
+
 	private function is_protected( $rel ) {
 		$parts = explode( '/', $rel );
 		if ( 0 === strpos( end( $parts ), '.vitpress-old-' ) ) {

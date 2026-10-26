@@ -21,16 +21,6 @@ $all_admins = get_users( [
 	'order'      => 'ASC',
 ] );
 
-$forms_settings = isset( $settings['forms'] ) ? $settings['forms'] : array();
-$whatsapp       = isset( $forms_settings['whatsapp'] ) ? $forms_settings['whatsapp'] : '';
-$whatsapp_msg   = isset( $forms_settings['whatsapp_msg'] ) ? $forms_settings['whatsapp_msg'] : 'Olá, sou {nome} e gostaria de saber mais sobre os serviços.';
-$receive_email  = isset( $forms_settings['receive_email'] ) ? $forms_settings['receive_email'] : '';
-$send_confirm   = ! empty( $forms_settings['send_confirm'] );
-$show_testimonial = ! empty( $forms_settings['show_testimonial'] );
-$testimonial_name = isset( $forms_settings['testimonial_name'] ) ? $forms_settings['testimonial_name'] : '';
-$testimonial_text = isset( $forms_settings['testimonial_text'] ) ? $forms_settings['testimonial_text'] : '';
-$page_exists = get_page_by_path( 'novo-lead' ) !== null;
-
 $integ_settings = isset( $settings['integrations'] ) ? $settings['integrations'] : array();
 $gads_contact   = isset( $integ_settings['google_ads_contact'] ) ? $integ_settings['google_ads_contact'] : array();
 $gads_offline = isset( $integ_settings['google_ads_offline'] ) ? $integ_settings['google_ads_offline'] : array();
@@ -48,8 +38,7 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 	<h2 class="nav-tab-wrapper">
 		<a href="?page=hub-vitagencia&tab=geral" class="nav-tab <?php echo 'geral' === $active_tab ? 'nav-tab-active' : ''; ?>">Marketing</a>
 		<a href="?page=hub-vitagencia&tab=lgpd" class="nav-tab <?php echo 'lgpd' === $active_tab ? 'nav-tab-active' : ''; ?>">LGPD</a>
-		<a href="?page=hub-vitagencia&tab=backup" class="nav-tab <?php echo 'backup' === $active_tab ? 'nav-tab-active' : ''; ?>">Backup</a>
-		<a href="?page=hub-vitagencia&tab=emails" class="nav-tab <?php echo 'emails' === $active_tab ? 'nav-tab-active' : ''; ?>">E-mails</a>
+		<a href="?page=hub-vitagencia&tab=emails" class="nav-tab <?php echo 'emails' === $active_tab ? 'nav-tab-active' : ''; ?>">Amazon</a>
 		<a href="?page=hub-vitagencia&tab=seguranca" class="nav-tab <?php echo 'seguranca' === $active_tab ? 'nav-tab-active' : ''; ?>">Segurança do WP</a>
 		<a href="?page=hub-vitagencia&tab=diagnostico" class="nav-tab <?php echo 'diagnostico' === $active_tab ? 'nav-tab-active' : ''; ?>">Diagnóstico</a>
 		<a href="?page=hub-vitagencia&tab=tracker" class="nav-tab <?php echo 'tracker' === $active_tab ? 'nav-tab-active' : ''; ?>">Tracker</a>
@@ -65,7 +54,9 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 				elseif ( 'license_requested' === $_GET['message'] ) echo 'Solicitação de licença enviada. Verifique o e-mail.';
 				elseif ( 'license_authorized' === $_GET['message'] ) echo 'Licença autorizada com sucesso!';
 				elseif ( 'ses_saved' === $_GET['message'] ) echo 'Configurações de SMTP salvas com sucesso.';
-				elseif ( 'ses_test_ok' === $_GET['message'] ) echo 'E-mail de teste enviado com sucesso! Verifique a caixa de entrada.';
+				elseif ( 's3_saved' === $_GET['message'] ) echo 'Configurações do Amazon S3 salvas com sucesso.';
+					elseif ( 's3_success' === $_GET['message'] ) echo 'Teste de conexão S3 realizado com sucesso! As credenciais estão corretas.';
+					elseif ( 'ses_test_ok' === $_GET['message'] ) echo 'E-mail de teste enviado com sucesso! Verifique a caixa de entrada.';
 				?>
 			</p>
 		</div>
@@ -88,7 +79,9 @@ $hide_login       = ! empty( $wp_settings['hide_login'] );
 
 	<div class="hub-tab-content" style="margin-top: 20px;">
 		<?php
-		if ( 'google-ads-export' === $active_tab ) {
+		if ( 'backup' === $active_tab ) {
+			echo '<div class="notice notice-info"><p>O backup mudou para o menu principal: <a href="' . esc_url( admin_url( 'admin.php?page=hub-backup' ) ) . '">Backup e Restauração</a>. As configurações do Amazon S3 estão na aba Amazon.</p></div>';
+		} elseif ( 'google-ads-export' === $active_tab ) {
 			echo '<div class="notice notice-info"><p>A exportação CSV de compras offline foi desativada. As conversões de Google Ads e Meta Ads são gerenciadas centralmente pelo VitAds.</p></div>';
 		} else {
 		$tab_file = HUB_PATH . 'admin/views/vitagencia-' . $active_tab . '.php';

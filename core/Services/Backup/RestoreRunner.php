@@ -255,6 +255,8 @@ class RestoreRunner {
 			foreach ( array( 'options', 'users', 'usermeta', 'posts', 'postmeta' ) as $name ) {
 				$tables[ $name ] = $staged['staged'][ $this->options['new_prefix'] . $name ] ?? null;
 			}
+			$state['plugin_copies'] = $this->plugin_copies_in_backup( $state );
+			$state['staged_tables'] = $staged['staged'];
 			$post = call_user_func( $this->options['post_process'], $state, $tables );
 			if ( empty( $post['ok'] ) ) {
 				$message = 'Falha no ajuste do banco restaurado: ' . ( $post['error'] ?? 'erro desconhecido' ) . '. O site não foi alterado.';
@@ -471,10 +473,20 @@ class RestoreRunner {
 		return new BackupDatabaseImporter( $this->db, substr( $this->op->id(), 0, 6 ) );
 	}
 
+	/**
+	 * Cópias do próprio VitPress dentro do backup (pasta com outro nome): não são restauradas, a pasta em uso permanece.
+	 *
+	 * @return string[]
+	 */
+	private function plugin_copies_in_backup( array $state ) {
+		$root = ! empty( $state['files_only'] ) ? rtrim( $this->op->extract_dir(), '/' ) : $this->op->extract_dir() . 'wp-content';
+		return BackupFileMover::detect_plugin_copies( $root . '/plugins' );
+	}
+
 	private function mover() {
 		$op = $this->op;
 		return new BackupFileMover(
-			$this->options['protected_plugins'],
+			array_merge( $this->options['protected_plugins'], $this->plugin_copies_in_backup( $op->state() ) ),
 			$op->id(),
 			function ( array $entry ) use ( $op ) {
 				$op->journal_append( $entry );

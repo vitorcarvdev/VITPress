@@ -172,9 +172,9 @@ $header = file_get_contents( $root . '/hub.php' );
 $config = file_get_contents( $root . '/config/config.php' );
 $updater_source = file_get_contents( $root . '/core/class-hub-vitagencia-updater.php' );
 
-check( preg_match( '/^\s*\*\s*Version:\s*1\.9\.2\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.9.2' );
-check( strpos( $header, "define( 'HUB_VERSION', '1.9.2' );" ) !== false, 'constante HUB_VERSION é 1.9.2' );
-check( strpos( $config, "'version'             => '1.9.2'" ) !== false, 'metadado interno de versão é 1.9.2' );
+check( preg_match( '/^\s*\*\s*Version:\s*1\.9\.3\s*$/m', $header ) === 1, 'cabeçalho identifica VitPress 1.9.3' );
+check( strpos( $header, "define( 'HUB_VERSION', '1.9.3' );" ) !== false, 'constante HUB_VERSION é 1.9.3' );
+check( strpos( $config, "'version'             => '1.9.3'" ) !== false, 'metadado interno de versão é 1.9.3' );
 check( strpos( $header, 'Plugin Name: VitPress' ) !== false, 'nome oficial permanece VitPress' );
 
 reset_state();
@@ -236,6 +236,11 @@ reset_state();
 remote( [ 'update_available' => true, 'version' => '1.9.2', 'package_url' => $package, 'changelog' => 'Correção' ] );
 $same_192 = updater()->check_for_updates( transient_with() );
 check( empty( $same_192->response['hub-vitagencia/hub.php'] ) && isset( $same_192->no_update['hub-vitagencia/hub.php'] ), '1.9.2 instalada não é reoferecida como atualização' );
+reset_state();
+remote( [ 'update_available' => true, 'version' => '1.9.3', 'package_url' => $package, 'changelog' => 'Reparo do esquema de leads' ] );
+$from_192 = updater()->check_for_updates( transient_with() );
+check( $state['bodies'][0]['current_version'] === '1.9.2', '1.9.2 -> 1.9.3: check envia a versão instalada 1.9.2' );
+check( ( $from_192->response['hub-vitagencia/hub.php']->new_version ?? '' ) === '1.9.3', '1.9.2 -> 1.9.3: WordPress recebe a oferta da 1.9.3' );
 reset_state();
 remote( [ 'update_available' => true, 'version' => '1.9.10', 'package_url' => $package, 'changelog' => 'Futura' ] );
 $newer_patch = updater()->check_for_updates( transient_with() );
@@ -324,7 +329,7 @@ $details = updater()->plugins_api_handler( false, 'plugin_information', (object)
 check( is_object( $details ) && $details->name === 'VitPress' && $details->version === '1.9.1', 'tela de detalhes recebe VitPress e a versão nova' );
 check( is_object( $details ) && strpos( $details->sections['changelog'], '12345678-1234-4234-8234-123456789abc' ) === false, 'a tela de detalhes não expõe o UUID' );
 
-$zip_path = dirname( $root ) . '/vitpress-v1.9.2.zip';
+$zip_path = dirname( $root ) . '/vitpress-v1.9.3.zip';
 if ( is_file( $zip_path ) ) {
     unlink( $zip_path );
 }
@@ -358,7 +363,7 @@ if ( $opened === true ) {
     check( in_array( 'hub-vitagencia/hub.php', $names, true ), 'ZIP contém hub-vitagencia/hub.php' );
     check( $parallel === [], 'ZIP não cria a pasta vitpress/' );
     $main = file_get_contents( 'zip://' . $zip_path . '#hub-vitagencia/hub.php' );
-    check( strpos( $main, 'Version: 1.9.2' ) !== false, 'hub.php dentro do ZIP está na versão 1.9.2' );
+    check( strpos( $main, 'Version: 1.9.3' ) !== false, 'hub.php dentro do ZIP está na versão 1.9.3' );
 }
 
 echo "\nRESULTADO: {$pass} pass, {$fail} fail\n";

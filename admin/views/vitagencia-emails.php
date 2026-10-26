@@ -106,3 +106,103 @@ $from_name  = isset( $ses['from_name'] ) ? $ses['from_name'] : get_bloginfo( 'na
 		</p>
 	</form>
 </div>
+
+<?php 
+$s3 = $settings['s3'] ?? []; 
+$s3_enabled = ! empty( $s3['enabled'] );
+$s3_access  = $s3['access_key'] ?? '';
+$s3_secret  = $s3['secret_key'] ?? '';
+$s3_region  = $s3['region'] ?? 'sa-east-1';
+$s3_bucket  = $s3['bucket'] ?? '';
+$retention_db = $s3['retention_db'] ?? 30;
+$retention_full = $s3['retention_full'] ?? 4;
+
+$display_secret = !empty($s3_secret) ? str_repeat('*', 36) . substr($s3_secret, -4) : '';
+?>
+<div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
+	<h2>Integração Amazon S3 (Backups Automáticos)</h2>
+	<p class="description">
+		Configure o envio automático de backups para o seu bucket no Amazon S3. Quando ativado, o VitPress fará o backup do banco de dados <strong>diariamente</strong> e o backup completo <strong>semanalmente</strong>.
+	</p>
+
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="hub_save_s3_backup">
+		<?php wp_nonce_field( 'hub_s3_backup_nonce', 'hub_nonce' ); ?>
+
+		<table class="form-table">
+			<tr>
+				<th scope="row">Status</th>
+				<td>
+					<label>
+						<input type="checkbox" name="s3[enabled]" value="1" <?php checked( $s3_enabled ); ?>>
+						Habilitar rotinas de backup automático para o S3
+					</label>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_access">Chave de Acesso (Access Key)</label></th>
+				<td>
+					<input name="s3[access_key]" type="text" id="s3_access" value="<?php echo esc_attr( $s3_access ); ?>" class="regular-text">
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_secret">Chave Secreta (Secret Key)</label></th>
+				<td>
+					<input name="s3[secret_key]" type="password" id="s3_secret" value="<?php echo esc_attr( $display_secret ); ?>" class="regular-text" placeholder="Deixe em branco para manter a atual">
+					<p class="description">A chave secreta não é exibida integralmente por motivos de segurança.</p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_region">Região</label></th>
+				<td>
+					<input name="s3[region]" type="text" id="s3_region" value="<?php echo esc_attr( $s3_region ); ?>" class="regular-text">
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_bucket">Bucket</label></th>
+				<td>
+					<input name="s3[bucket]" type="text" id="s3_bucket" value="<?php echo esc_attr( $s3_bucket ); ?>" class="regular-text" placeholder="ex: bkps-sites-vcsis">
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_retention_db">Retenção de BD</label></th>
+				<td>
+					Manter os últimos <input name="s3[retention_db]" type="number" id="s3_retention_db" value="<?php echo esc_attr( $retention_db ); ?>" class="small-text"> backups de Banco de Dados armazenados na Amazon S3.
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="s3_retention_full">Retenção Completo</label></th>
+				<td>
+					Manter os últimos <input name="s3[retention_full]" type="number" id="s3_retention_full" value="<?php echo esc_attr( $retention_full ); ?>" class="small-text"> backups Completos armazenados na Amazon S3.
+				</td>
+			</tr>
+		</table>
+
+		<p class="submit" style="display: flex; gap: 15px; align-items: center; max-width: 800px; flex-wrap: wrap;">
+			<button type="submit" name="submit_action" value="save" class="button button-primary">Salvar Configurações S3</button>
+			<span style="border-left: 1px solid #ccc; height: 30px;"></span>
+			<button type="submit" name="submit_action" value="test" class="button button-secondary">Testar Conexão S3</button>
+		</p>
+	</form>
+
+	<hr>
+	<h3>Diagnóstico do Worker</h3>
+	<?php
+	$job_state = get_option( 'hub_backup_job_state', false );
+	if ( $job_state ) :
+		$status = $job_state['status'] ?? 'N/A';
+		$color = 'black';
+		if ($status === 'done') $color = 'green';
+		if ($status === 'error') $color = 'red';
+		if (in_array($status, ['uploading', 'pending_generation', 'init_upload', 'completing'])) $color = 'orange';
+	?>
+		<p><strong>Último Job:</strong> <?php echo esc_html($job_state['type'] ?? ''); ?></p>
+		<p><strong>Status:</strong> <span style="color: <?php echo $color; ?>; font-weight: bold;"><?php echo esc_html($status); ?></span></p>
+		<p><strong>Atualizado em:</strong> <?php echo esc_html($job_state['updated_at'] ?? $job_state['start'] ?? 'N/A'); ?></p>
+		<?php if ( ! empty($job_state['error']) ) : ?>
+			<p style="color:red;"><strong>Último Erro:</strong> <?php echo esc_html($job_state['error']); ?></p>
+		<?php endif; ?>
+	<?php else : ?>
+		<p>Nenhum job de backup registrado ainda.</p>
+	<?php endif; ?>
+</div>

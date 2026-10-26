@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Formatos aceitos:
  * - vitpress_v1: manifest.json (generator VitPress ou Hub VitAgencia, backup_schema 1) + database.sql + wp-content/.
- * - hub_legacy_content: backup antigo do Hub VitAgência só com o conteúdo de wp-content na raiz,
+ * - hub_legacy_content: backup antigo do VitPress (versão anterior) só com o conteúdo de wp-content na raiz,
  *   sem manifesto e sem banco. Permite apenas restauração de arquivos.
  */
 class BackupArchiveValidator {
@@ -190,7 +190,7 @@ class BackupArchiveValidator {
 		}
 		foreach ( self::LEGACY_FORBIDDEN_ROOTS as $forbidden ) {
 			if ( isset( $roots[ $forbidden ] ) ) {
-				return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de versões anteriores (Hub VitAgência, nome anterior do VitPress).';
+				return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de suas versões anteriores.';
 			}
 		}
 		foreach ( self::LEGACY_CONTENT_MARKERS as $marker ) {
@@ -198,6 +198,6 @@ class BackupArchiveValidator {
 				return '';
 			}
 		}
-		return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de versões anteriores (Hub VitAgência, nome anterior do VitPress).';
+		return 'Manifesto não encontrado. O arquivo não é um backup reconhecido do VitPress nem de suas versões anteriores.';
 	}
 }
