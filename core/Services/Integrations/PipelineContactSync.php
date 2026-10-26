@@ -141,32 +141,110 @@ class PipelineContactSync {
 			if ( empty( $rows ) ) {
 				return;
 			}
-			$ids = array();
-			foreach ( $rows as $row ) {
-				$ids[] = (string) $row->shared_contact_id;
-			}
-			$body = self::request( 'POST', '/pipeline/contacts/pull', array( 'shared_contact_ids' => $ids ) );
-			if ( ! is_array( $body ) ) {
-				return;
-			}
-			$by_shared = array();
-			foreach ( $rows as $row ) {
-				$by_shared[ (string) $row->shared_contact_id ] = (int) $row->id;
-			}
-			foreach ( $body as $remote ) {
-				if ( ! is_array( $remote ) || empty( $remote['shared_contact_id'] ) ) {
-					continue;
-				}
-				$lead_id = $by_shared[ (string) $remote['shared_contact_id'] ] ?? 0;
-				if ( $lead_id > 0 ) {
-					self::apply_remote( $lead_id, $remote );
-				}
-			}
+			self::pull_rows( $rows );
 		} catch ( \Throwable $e ) {
 			error_log( '[HUB PIPELINE] pull_failed' );
 		}
 	}
 
+	/**
+	 * Atualiza as etapas locais a partir do VitAds SEM depender de ninguém abrir o pipeline antigo (WP-Cron, a cada 5 min).
+	 *
+	 * Percorre os leads vinculados em páginas (por id, com cursor guardado), no máximo $max_pages por execução, e retoma de
+	 * onde parou. Trava contra execuções simultâneas, não grava nada no VitAds (a rota /contacts/pull é só leitura), aplica a
+	 * etapa remota somente quando ela é mais nova e com origem vitads_sync (não devolve nada ao VitAds, então não há laço) e
+	 * nunca dispara conversão. Falha de rede mantém o cursor para repetir a mesma página na próxima execução.
+	 *
+	 * @param int $max_pages Páginas por execução.
+	 * @return array{status:string,pages:int,applied:int}
+	 */
+	public static function pull_cycle( $max_pages = 5 ) {
+		$summary = array(
+			'status'  => 'disabled',
+			'pages'   => 0,
+			'applied' => 0,
+		);
+		try {
+			if ( ! self::enabled() ) {
+				return $summary;
+			}
+			if ( get_transient( 'hub_pipeline_pull_lock' ) ) {
+				$summary['status'] = 'locked';
+				return $summary;
+			}
+			set_transient( 'hub_pipeline_pull_lock', 1, 240 );
+			$summary['status'] = 'ok';
+
+			$page_size = max( 1, min( 200, (int) apply_filters( 'hub_pipeline_pull_page_size', 200 ) ) );
+			$table     = Database::table( 'leads' );
+			$cursor    = (int) get_option( 'hub_pipeline_pull_cursor', 0 );
+			$db        = Database::db();
+
+			while ( $summary['pages'] < max( 1, (int) $max_pages ) ) {
+				$rows = $db->get_results(
+					$db->prepare(
+						"SELECT id, shared_contact_id FROM {$table} WHERE id > %d AND shared_contact_id IS NOT NULL AND shared_contact_id <> '' ORDER BY id ASC LIMIT %d",
+						$cursor,
+						$page_size
+					)
+				);
+				if ( empty( $rows ) ) {
+					$cursor = 0; // chegou ao fim: recomeça na próxima execução
+					break;
+				}
+				$result = self::pull_rows( $rows );
+				if ( null === $result ) {
+					$summary['status'] = 'failed'; // mantém o cursor: a mesma página é repetida depois
+					break;
+				}
+				$summary['pages']++;
+				$summary['applied'] += $result;
+				$cursor              = (int) end( $rows )->id;
+				if ( count( $rows ) < $page_size ) {
+					$cursor = 0;
+					break;
+				}
+			}
+			update_option( 'hub_pipeline_pull_cursor', $cursor, false );
+		} catch ( \Throwable $e ) {
+			$summary['status'] = 'failed';
+			error_log( '[HUB PIPELINE] pull_cycle_failed' );
+		}
+		delete_transient( 'hub_pipeline_pull_lock' );
+		return $summary;
+	}
+
+	/**
+	 * Uma página de leads: pede o estado ao VitAds e aplica as etapas mais novas.
+	 *
+	 * @param array<int,object> $rows Objetos com id e shared_contact_id.
+	 * @return int|null Quantidade de etapas aplicadas; null se o VitAds não respondeu.
+	 */
+	private static function pull_rows( array $rows ) {
+		$ids = array();
+		foreach ( $rows as $row ) {
+			$ids[] = (string) $row->shared_contact_id;
+		}
+		$body = self::request( 'POST', '/pipeline/contacts/pull', array( 'shared_contact_ids' => $ids ) );
+		if ( ! is_array( $body ) ) {
+			return null;
+		}
+		$by_shared = array();
+		foreach ( $rows as $row ) {
+			$by_shared[ (string) $row->shared_contact_id ] = (int) $row->id;
+		}
+		$applied = 0;
+		foreach ( $body as $remote ) {
+			if ( ! is_array( $remote ) || empty( $remote['shared_contact_id'] ) ) {
+				continue;
+			}
+			$lead_id = $by_shared[ (string) $remote['shared_contact_id'] ] ?? 0;
+			if ( $lead_id > 0 && self::apply_remote( $lead_id, $remote ) ) {
+				$applied++;
+			}
+		}
+		return $applied;
+	}
 	private static function enabled() {
 		$config = VitAdsEventService::config();
 		return ! empty( $config['enabled'] ) && $config['token'] !== '' && $config['endpoint'] !== '';
@@ -177,7 +255,7 @@ class PipelineContactSync {
 	 * @return array<string, string>
 	 */
 	private static function resolve_payload( $lead ) {
-		return array(
+		$payload = array(
 			'local_id'          => (string) $lead->id,
 			'phone'             => VitAdsEventService::normalize_phone( $lead->phone ?? '' ),
 			'shared_contact_id' => ! empty( $lead->shared_contact_id ) ? (string) $lead->shared_contact_id : '',
@@ -185,6 +263,39 @@ class PipelineContactSync {
 			'stage_updated_at'  => self::mysql_to_utc( $lead->stage_updated_at ),
 			'stage_source'      => ! empty( $lead->stage_source ) ? (string) $lead->stage_source : 'vitpress_form',
 		);
+		$contact = self::contact_profile( $lead );
+		if ( array() !== $contact ) {
+			$payload['contact'] = $contact;
+		}
+		return $payload;
+	}
+
+	/**
+	 * Perfil mínimo do lead enviado ao VitAds (campo opcional "contact"): quem é, quando chegou e por onde chegou.
+	 * Finalidade: o cliente e a equipe identificarem o lead e avaliarem o atendimento no portal. Vai só para o VitAds do
+	 * próprio cliente (token do site). Não saem observações, valores, IP, user-agent nem identificadores de clique: a origem
+	 * é só o rótulo calculado aqui. Campos vazios não são enviados.
+	 *
+	 * @param object $lead
+	 * @return array<string, string>
+	 */
+	private static function contact_profile( $lead ) {
+		$profile = array();
+		$name    = trim( (string) ( $lead->name ?? '' ) );
+		if ( '' !== $name ) {
+			$profile['name'] = function_exists( 'mb_substr' ) ? mb_substr( $name, 0, 190 ) : substr( $name, 0, 190 );
+		}
+		$email = trim( (string) ( $lead->email ?? '' ) );
+		if ( '' !== $email && is_email( $email ) ) {
+			$profile['email'] = strtolower( $email );
+		}
+		if ( ! empty( $lead->source ) || ! empty( $lead->utm_source ) || ! empty( $lead->gclid ) || ! empty( $lead->fbclid ) ) {
+			$profile['source'] = PipelineModule::format_source_label( $lead );
+		}
+		if ( ! empty( $lead->created_at ) && '0000-00-00 00:00:00' !== $lead->created_at ) {
+			$profile['received_at'] = self::mysql_to_utc( $lead->created_at );
+		}
+		return $profile;
 	}
 
 	/**
@@ -211,23 +322,25 @@ class PipelineContactSync {
 
 	/**
 	 * @param array<string, mixed> $remote
+	 * @return bool true se a etapa local mudou.
 	 */
 	private static function apply_remote( $lead_id, array $remote ) {
 		if ( empty( $remote['stage'] ) || empty( $remote['stage_updated_at'] ) ) {
-			return;
+			return false;
 		}
 		$lead = self::lead( $lead_id );
 		if ( ! $lead ) {
-			return;
+			return false;
 		}
 		$remote_mysql = self::utc_to_mysql( (string) $remote['stage_updated_at'] );
 		$local_stamp  = ! empty( $lead->stage_updated_at ) ? (string) $lead->stage_updated_at : '';
 		$remote_stage = PipelineModule::normalize_stage( (string) $remote['stage'] );
 		$local_stage  = PipelineModule::normalize_stage( $lead->stage );
 		if ( $remote_stage === $local_stage || $remote_mysql < $local_stamp ) {
-			return;
+			return false;
 		}
-		PipelineModule::change_stage( $lead_id, $remote_stage, 'vitads_sync', $lead->stage, $remote_mysql );
+		$changed = PipelineModule::change_stage( $lead_id, $remote_stage, 'vitads_sync', $lead->stage, $remote_mysql );
+		return is_array( $changed ) && ! empty( $changed['changed'] );
 	}
 
 	private static function lead( $lead_id ) {
@@ -236,7 +349,7 @@ class PipelineContactSync {
 			return null;
 		}
 		$table = Database::table( 'leads' );
-		return Database::db()->get_row( Database::db()->prepare( "SELECT id, phone, stage, stage_updated_at, stage_source, shared_contact_id FROM {$table} WHERE id = %d", $lead_id ) );
+		return Database::db()->get_row( Database::db()->prepare( "SELECT id, name, email, phone, source, gclid, fbclid, utm_source, utm_medium, created_at, stage, stage_updated_at, stage_source, shared_contact_id FROM {$table} WHERE id = %d", $lead_id ) );
 	}
 
 	/**

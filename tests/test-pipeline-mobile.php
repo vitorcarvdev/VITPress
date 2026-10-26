@@ -96,11 +96,17 @@ check( $notes && 'nota sem mexer na etapa' === $notes->notes && 'negotiating' ==
 
 $wpdb->delete( $wpdb->prefix . 'hub_leads', array( 'id' => $lead_id ), array( '%d' ) );
 
+// Este teste cobre o app antigo: com o site ligado ao VitAds o /pipeline/ passa a redirecionar ao portal (test-pipeline-vitads-redirect-sync.php).
+$legacy_settings = get_option( 'hub_settings', array() );
+$legacy_off      = is_array( $legacy_settings ) ? $legacy_settings : array();
+$legacy_off['vitads'] = array_merge( isset( $legacy_off['vitads'] ) && is_array( $legacy_off['vitads'] ) ? $legacy_off['vitads'] : array(), array( 'enabled' => false ) );
+update_option( 'hub_settings', $legacy_off );
 $base = home_url( '/pipeline/' );
 $headers = get_headers( $base, true );
 $status = is_array( $headers ) ? (string) ( $headers[0] ?? '' ) : '';
 $guest = (string) file_get_contents( $base );
 check( false !== strpos( $status, '200' ) && ( false !== strpos( $guest, 'wp-login.php' ) || false !== strpos( $guest, 'vcsis' ) ) && false !== strpos( $guest, 'pipeline' ) && false === strpos( $guest, 'vp-card' ), 'pipeline sem sessão pede login e volta ao pipeline' );
+update_option( 'hub_settings', $legacy_settings );
 
 $manifest = file_get_contents( home_url( '/pipeline/manifest.webmanifest' ) );
 $decoded = json_decode( (string) $manifest, true );

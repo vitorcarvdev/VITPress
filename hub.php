@@ -41,6 +41,7 @@ register_activation_hook( __FILE__, 'activate_hub_plugin' );
  */
 function deactivate_hub_plugin() {
 	wp_clear_scheduled_hook( 'hub_google_ads_polling' );
+	\Hub\Core\Services\Integrations\PipelinePullWorker::unschedule();
 	// Ações de limpeza temporária se necessário
 }
 register_deactivation_hook( __FILE__, 'deactivate_hub_plugin' );
@@ -99,6 +100,9 @@ function hub_init() {
 
 	// Inicializa Conector com o Pipeline Central VCSis
 	\Hub\Core\Services\Integrations\HubPipelineConnector::get_instance()->init();
+
+	// Sincronização agendada das etapas VitAds -> VitPress (não depende de abrir o pipeline antigo)
+	\Hub\Core\Services\Integrations\PipelinePullWorker::get_instance()->init();
 
 	// Fila de Exportação Offline (CSV) para o Google Ads
 	$offline_queue = new \Hub\Core\Services\GoogleAdsOfflineQueueService();

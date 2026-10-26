@@ -1,6 +1,8 @@
 <?php
 namespace Hub\Modules\Pipeline;
 
+use Hub\Core\Services\Integrations\VitAdsPortal;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -113,10 +115,26 @@ class MobilePipeline {
 			self::send_service_worker();
 		}
 		if ( 'board' === $mode ) {
+			self::maybe_redirect_to_portal();
 			self::send_board();
 		}
 	}
 
+	/**
+	 * Acesso humano à página /pipeline/: vai para o login do portal do VitAds (302, reversível).
+	 * Só GET/HEAD e só com o site ligado ao VitAds. O manifest, o service worker e a API REST continuam respondendo,
+	 * então instalações antigas do app não quebram e a sincronização de etapas não depende desta página.
+	 */
+	private static function maybe_redirect_to_portal() {
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'GET';
+		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) || ! VitAdsPortal::legacy_redirect_enabled() ) {
+			return;
+		}
+		nocache_headers();
+		header( 'X-Robots-Tag: noindex, nofollow' );
+		wp_redirect( VitAdsPortal::login_url(), 302, 'VitPress' ); // phpcs:ignore WordPress.Security.SafeRedirect
+		exit;
+	}
 	private static function send_board() {
 		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ) : '';
 		if ( $path && substr( untrailingslashit( $path ), -9 ) === '/pipeline' && substr( $path, -1 ) !== '/' ) {
