@@ -33,6 +33,8 @@ require_once HUB_PATH . 'core/Autoloader.php';
  */
 function activate_hub_plugin() {
 	\Hub\Core\Installer::install();
+	// Reativar nunca reinicia a importação histórica: só registra o estado se ele ainda não existe.
+	\Hub\Core\Services\Integrations\HistoricalImport::on_activation();
 }
 register_activation_hook( __FILE__, 'activate_hub_plugin' );
 
@@ -42,6 +44,7 @@ register_activation_hook( __FILE__, 'activate_hub_plugin' );
 function deactivate_hub_plugin() {
 	wp_clear_scheduled_hook( 'hub_google_ads_polling' );
 	\Hub\Core\Services\Integrations\PipelinePullWorker::unschedule();
+	\Hub\Core\Services\Integrations\HistoricalImport::on_deactivation();
 	// Ações de limpeza temporária se necessário
 }
 register_deactivation_hook( __FILE__, 'deactivate_hub_plugin' );
@@ -103,6 +106,9 @@ function hub_init() {
 
 	// Sincronização agendada das etapas VitAds -> VitPress (não depende de abrir o pipeline antigo)
 	\Hub\Core\Services\Integrations\PipelinePullWorker::get_instance()->init();
+
+	// Importação histórica única dos leads antigos para o VitAds (automática, em lotes pelo WP-Cron; independente da sincronização acima)
+	\Hub\Core\Services\Integrations\HistoricalImport::get_instance()->init();
 
 	// Importação dos leads antigos para o VitAds (somente manual: wp vitpress backfill-leads).
 	if ( defined( 'WP_CLI' ) && WP_CLI ) {

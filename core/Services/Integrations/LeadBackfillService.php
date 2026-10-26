@@ -31,6 +31,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 class LeadBackfillService {
 
 	const OPTION_STATE    = 'hub_backfill_state';
+	/** Cursor da importação histórica automática (HistoricalImport); separado do estado do comando manual. */
+	const OPTION_AUTO_CURSOR = 'hub_historical_import_cursor';
 	const OPTION_FAILURES = 'hub_backfill_failures';
 	const OPTION_LOCK     = 'hub_backfill_lock';
 	const BATCH_MAX       = 50;
@@ -52,6 +54,8 @@ class LeadBackfillService {
 		$include_linked = ! array_key_exists( 'include_linked', $args ) || ! empty( $args['include_linked'] );
 		$restart        = ! empty( $args['restart'] );
 		$after_id       = max( 0, (int) ( $args['after_id'] ?? 0 ) );
+		$http_timeout   = max( 3, min( 30, (int) ( $args['http_timeout'] ?? 20 ) ) );
+		$state_option   = ( isset( $args['state_option'] ) && self::OPTION_AUTO_CURSOR === $args['state_option'] ) ? self::OPTION_AUTO_CURSOR : self::OPTION_STATE;
 
 		$result = array(
 			'mode'    => $execute ? 'execute' : ( $local_only ? 'local_only' : 'dry_run' ),
@@ -81,7 +85,7 @@ class LeadBackfillService {
 		}
 
 		try {
-			$state = $execute ? self::load_state( $restart ) : self::new_state();
+			$state = $execute ? self::load_state( $restart, $state_option ) : self::new_state();
 			if ( $execute ) {
 				// Uma execução real retoma do cursor e dos totais gravados.
 				$result['counts']  = array_merge( $result['counts'], $state['counts'] );
@@ -97,13 +101,19 @@ class LeadBackfillService {
 			$db       = Database::db();
 
 			while ( true ) {
-				$rows = $db->get_results(
+				$db->last_error = '';
+				$rows           = $db->get_results(
 					$db->prepare(
 						"SELECT id, name, email, phone, source, gclid, fbclid, utm_source, utm_medium, created_at, stage, stage_updated_at, stage_source, shared_contact_id FROM {$table} WHERE id > %d ORDER BY id ASC LIMIT %d",
 						$cursor,
 						$batch
 					)
 				);
+				if ( null === $rows || '' !== (string) $db->last_error ) {
+					// Erro de banco (conexão, tabela) não é fim da lista: nunca pode concluir a importação.
+					$result['reason'] = 'db_error';
+					break;
+				}
 				if ( empty( $rows ) ) {
 					$result['status'] = 'completed';
 					if ( $execute ) {
@@ -143,7 +153,7 @@ class LeadBackfillService {
 						$response = self::send( array(
 							'dry_run'  => ! $execute,
 							'contacts' => $items,
-						) );
+						), $http_timeout );
 						$code = (int) $response['code'];
 						if ( 200 !== $code || ! is_array( $response['body'] ) || empty( $response['body']['results'] ) ) {
 							$abort = self::abort_reason( $code );
@@ -152,7 +162,7 @@ class LeadBackfillService {
 								break;
 							}
 							$failures++;
-							if ( $failures >= self::ABORT_AFTER ) {
+							if ( $failures >= self::ABORT_AFTER || ( $max_seconds > 0 && ( time() - $started ) >= $max_seconds ) ) {
 								$result['reason'] = 'vitads_unreachable';
 								break;
 							}
@@ -185,7 +195,7 @@ class LeadBackfillService {
 				$result['cursor'] = $cursor;
 				$result['batches']++;
 				if ( $execute ) {
-					$state = self::checkpoint( $state, $cursor, $result );
+					$state = self::checkpoint( $state, $cursor, $result, $state_option );
 				}
 				if ( count( $rows ) < $batch ) {
 					$result['status'] = 'completed';
@@ -204,7 +214,7 @@ class LeadBackfillService {
 			}
 			$result['cursor'] = $cursor;
 			if ( $execute ) {
-				self::checkpoint( $state, $cursor, $result );
+				self::checkpoint( $state, $cursor, $result, $state_option );
 			}
 		} finally {
 			if ( $execute ) {
@@ -340,7 +350,7 @@ class LeadBackfillService {
 	 * @param array<string,mixed> $payload
 	 * @return array{code:int,body:array<string,mixed>|null}
 	 */
-	private static function send( array $payload ) {
+	private static function send( array $payload, $timeout = 20 ) {
 		// Gancho só para testes automatizados (a constante precisa estar definida): em produção nenhum plugin pode interceptar o envio.
 		$custom = ( defined( 'HUB_BACKFILL_TEST_TRANSPORT' ) && HUB_BACKFILL_TEST_TRANSPORT ) ? apply_filters( 'hub_vitads_backfill_transport', null, $payload ) : null;
 		if ( is_array( $custom ) && isset( $custom['code'] ) ) {
@@ -352,7 +362,7 @@ class LeadBackfillService {
 		$config   = VitAdsEventService::config();
 		$base     = rtrim( (string) preg_replace( '#/events/?$#', '', (string) $config['endpoint'] ), '/' );
 		$response = wp_remote_post( $base . '/pipeline/contacts/backfill', array(
-			'timeout'     => 20,
+			'timeout'     => (int) $timeout,
 			'redirection' => 0,
 			'headers'     => array(
 				'Authorization' => 'Bearer ' . $config['token'],
@@ -389,8 +399,8 @@ class LeadBackfillService {
 	}
 
 	/** @return array<string,mixed> */
-	private static function load_state( $restart ) {
-		$state = get_option( self::OPTION_STATE, array() );
+	private static function load_state( $restart, $option = self::OPTION_STATE ) {
+		$state = get_option( $option, array() );
 		if ( $restart || ! is_array( $state ) || ! isset( $state['cursor'] ) || ! empty( $state['completed_at'] ) ) {
 			// Execução nova: a anterior concluída (ou pedida do zero) não é retomada. O reenvio é seguro (idempotente).
 			return self::new_state();
@@ -403,13 +413,13 @@ class LeadBackfillService {
 	 * @param array<string,mixed> $result
 	 * @return array<string,mixed>
 	 */
-	private static function checkpoint( array $state, $cursor, array $result ) {
+	private static function checkpoint( array $state, $cursor, array $result, $option = self::OPTION_STATE ) {
 		$state['cursor']     = (int) $cursor;
 		$state['scanned']    = (int) $result['scanned'];
 		$state['counts']     = $result['counts'];
 		$state['skipped']    = $result['skipped'];
 		$state['updated_at'] = gmdate( 'c' );
-		update_option( self::OPTION_STATE, $state, false );
+		update_option( $option, $state, false );
 		update_option( self::OPTION_LOCK, time(), false );
 		return $state;
 	}
