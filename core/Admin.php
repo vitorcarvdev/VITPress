@@ -3,6 +3,7 @@ namespace Hub\Core;
 
 use Hub\Core\Services\Licensing\LocalLicenseProvider;
 use Hub\Core\Services\PluginProtectionService;
+use Hub\Core\Services\Integrations\VitAdsPortal;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -43,6 +44,7 @@ class Admin {
 	public function init() {
 		add_action( 'admin_init', array( $this, 'ensure_vcsis_capabilities' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu_structure' ) );
+		add_action( 'admin_init', array( $this, 'maybe_redirect_legacy_pipeline' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'admin_post_hub_save_profile', array( $this, 'handle_save_profile' ) );
 		
@@ -131,8 +133,9 @@ class Admin {
 
 		// Submenu 2: Pipeline (Visualização Somente Leitura)
 		if ( $module_manager->is_active( 'pipeline' ) ) {
+			// Com o site ligado ao VitAds o item some do menu (a página continua registrada e redireciona ao portal).
 			add_submenu_page(
-				$main_slug,
+				VitAdsPortal::legacy_redirect_enabled() ? '' : $main_slug,
 				'Pipeline',
 				'Pipeline',
 				'manage_options',
@@ -212,6 +215,21 @@ class Admin {
 		}
 	}
 
+	/**
+	 * Quem chegar ao kanban antigo (favorito, link velho) é levado ao portal do VitAds. Só navegação GET/HEAD no wp-admin.
+	 */
+	public function maybe_redirect_legacy_pipeline() {
+		if ( wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+		$page   = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'GET';
+		if ( 'hub-pipeline' !== $page || ! in_array( $method, array( 'GET', 'HEAD' ), true ) || ! VitAdsPortal::legacy_redirect_enabled() ) {
+			return;
+		}
+		wp_redirect( VitAdsPortal::login_url(), 302, 'VitPress' ); // phpcs:ignore WordPress.Security.SafeRedirect
+		exit;
+	}
 	/**
 	 * Renderiza a página principal (redireciona para Dashboard ou Onboarding).
 	 * (Desativado, pois agora redirecionamos para Conversões diretamente).

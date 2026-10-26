@@ -610,7 +610,10 @@ class LeadCollectorService {
 			$wa_link = 'https://wa.me/' . $clean_phone;
 		}
 
-		$pipeline_url = admin_url( 'admin.php?page=hub-pipeline' );
+		// Com o site ligado ao VitAds o pipeline do cliente é o portal; sem a ligação, o kanban local continua sendo o destino.
+		$pipeline_url = \Hub\Core\Services\Integrations\VitAdsPortal::legacy_redirect_enabled()
+			? \Hub\Core\Services\Integrations\VitAdsPortal::login_url()
+			: admin_url( 'admin.php?page=hub-pipeline' );
 		$site_name    = get_bloginfo( 'name' ) ?: 'VitPress';
 
 		$subject = "[Novo Interessado] {$lead_data['name']} - Atendente Virtual";
