@@ -97,7 +97,13 @@ class ToolsModule extends AbstractModule {
 		}
 		check_admin_referer( 'hub_lead_collector_nonce', 'hub_nonce' );
 
-		$raw = isset( $_POST['collector'] ) ? (array) $_POST['collector'] : array();
+		$raw = isset( $_POST['collector'] ) && is_array( $_POST['collector'] ) ? $_POST['collector'] : array();
+
+		// Formulário que chega incompleto (firewall, max_input_vars...) não pode apagar as configurações salvas com os padrões.
+		if ( ! isset( $raw['attendant_name'] ) || ! array_key_exists( 'flow_json', $raw ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=hub-atendente&error=incomplete&posted=' . count( $_POST, COUNT_RECURSIVE ) . '&max=' . absint( ini_get( 'max_input_vars' ) ) ) );
+			exit;
+		}
 
 		$flow = array();
 		if ( ! empty( $raw['flow_json'] ) ) {
@@ -128,7 +134,45 @@ class ToolsModule extends AbstractModule {
 			'flow'                 => $flow,
 		);
 
+		// Banco sem utf8mb4 (utf8 antigo) recusa emojis e a gravação inteira falha: guarda os emojis como entidades.
+		$four_byte_ok = \Hub\Core\Services\LeadCollectorService::db_supports_4byte();
+		if ( ! $four_byte_ok ) {
+			$settings = \Hub\Core\Services\LeadCollectorService::encode_emoji( $settings );
+		}
+
+		global $wpdb;
+		$wpdb->last_error = '';
 		update_option( 'hub_lead_collector', $settings );
+		$update_error = (string) $wpdb->last_error; // erro da própria gravação, antes de qualquer outra consulta
+
+		// Confere o que ficou GRAVADO no banco (e não só o que o cache de objetos devolve): se não bateu, avisa em vez de dizer que salvou.
+		$stored = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", 'hub_lead_collector' ) );
+		$db_error = '' !== $update_error ? $update_error : ( $four_byte_ok ? '' : 'a tabela de opções do banco não usa utf8mb4' );
+		if ( null === $stored || maybe_serialize( maybe_unserialize( $stored ) ) !== maybe_serialize( $settings ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=hub-atendente&error=not_persisted&dberr=' . rawurlencode( substr( $db_error, 0, 120 ) ) ) );
+			exit;
+		}
+		// Com cache de objetos persistente, garante que a próxima leitura venha do valor novo.
+		wp_cache_delete( 'hub_lead_collector', 'options' );
+		wp_cache_delete( 'alloptions', 'options' );
+		wp_cache_delete( 'notoptions', 'options' );
+
+		// Destino do redirecionamento final (WhatsApp): mesmas configurações usadas pelo Atendente (hub_settings > forms).
+		if ( isset( $_POST['forms'] ) && is_array( $_POST['forms'] ) ) {
+			$hub_settings = get_option( 'hub_settings', array() );
+			$forms        = isset( $hub_settings['forms'] ) && is_array( $hub_settings['forms'] ) ? $hub_settings['forms'] : array();
+			if ( isset( $_POST['forms']['whatsapp'] ) ) {
+				$forms['whatsapp'] = preg_replace( '/\D/', '', sanitize_text_field( wp_unslash( $_POST['forms']['whatsapp'] ) ) );
+			}
+			if ( isset( $_POST['forms']['whatsapp_msg'] ) ) {
+				$forms['whatsapp_msg'] = sanitize_text_field( wp_unslash( $_POST['forms']['whatsapp_msg'] ) );
+				if ( ! $four_byte_ok ) {
+					$forms['whatsapp_msg'] = \Hub\Core\Services\LeadCollectorService::encode_emoji( $forms['whatsapp_msg'] );
+				}
+			}
+			$hub_settings['forms'] = $forms;
+			update_option( 'hub_settings', $hub_settings );
+		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=hub-atendente&message=saved' ) );
 		exit;

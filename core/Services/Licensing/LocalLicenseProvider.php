@@ -16,6 +16,21 @@ class LocalLicenseProvider implements LicenseProviderInterface {
 	}
 
 	/**
+	 * O domínio do site (host de site_url(), configurado no WordPress; nunca o cabeçalho Host da requisição)
+	 * é exatamente "localhost"? Subdomínios (ex.: x.localhost), IPs e domínios que apenas contêm "localhost" não contam.
+	 * Pode ser desligado com: add_filter( 'hub/auto_license_localhost', '__return_false' );
+	 *
+	 * @param mixed $host Host do site.
+	 * @return bool
+	 */
+	public static function is_local_development_host( $host ) {
+		if ( ! is_string( $host ) || 'localhost' !== strtolower( trim( $host ) ) ) {
+			return false;
+		}
+		return false !== apply_filters( 'hub/auto_license_localhost', true );
+	}
+
+	/**
 	 * Retorna o status detalhado da licença local.
 	 */
 	public function getStatus(): array {
@@ -32,6 +47,18 @@ class LocalLicenseProvider implements LicenseProviderInterface {
 		}
 
 		$host = wp_parse_url( site_url(), PHP_URL_HOST );
+
+		// Desenvolvimento local: o domínio registrado "localhost" é licenciado automaticamente.
+		if ( self::is_local_development_host( $host ) ) {
+			return [
+				'is_valid'      => true,
+				'reason'        => 'licensed_localhost',
+				'domain'        => $host,
+				'uuid'          => $uuid,
+				'authorized_at' => current_time( 'mysql' ),
+				'authorized_by' => 'localhost (automático)',
+			];
+		}
 
 		if ( empty( $license['signature'] ) || empty( $uuid ) ) {
 			return [

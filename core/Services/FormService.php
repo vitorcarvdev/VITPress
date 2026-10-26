@@ -21,7 +21,6 @@ class FormService {
 		add_action( 'wp_ajax_nopriv_hub_submit_form', array( $this, 'handle_submit' ) );
 		add_action( 'wp_ajax_hub_submit_form', array( $this, 'handle_submit' ) );
 		
-		add_action( 'wp_ajax_hub_generate_page', array( $this, 'handle_generate_page' ) );
 		add_filter( 'template_include', array( $this, 'override_conversion_template' ) );
 		add_action( 'init', array( $this, 'ensure_thank_you_page_exists' ) );
 	}
@@ -275,46 +274,9 @@ class FormService {
 	}
 
 	/**
-	 * Processa a geraÃ§Ã£o automÃ¡tica da pÃ¡gina de conversÃ£o.
-	 */
-	public function handle_generate_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( array( 'message' => 'Sem permissÃ£o.' ) );
-		}
-
-		check_ajax_referer( 'hub_generate_page_nonce', 'hub_nonce' );
-
-		$page = get_page_by_path( 'novo-lead' );
-
-		if ( $page ) {
-			wp_send_json_error( array( 'message' => 'A pÃ¡gina de conversÃ£o jÃ¡ existe e permanece inalterada.' ) );
-		}
-
-		$post_id = wp_insert_post( array(
-			'post_title'   => 'Novo Lead',
-			'post_name'    => 'novo-lead',
-			'post_status'  => 'publish',
-			'post_type'    => 'page',
-			'post_content' => '', // FicarÃ¡ vazio, o layout virÃ¡ do template customizado.
-		) );
-
-		if ( ! is_wp_error( $post_id ) ) {
-			wp_send_json_success( array( 'url' => get_permalink( $post_id ) ) );
-		} else {
-			wp_send_json_error( array( 'message' => 'Erro ao tentar criar a pÃ¡gina: ' . $post_id->get_error_message() ) );
-		}
-	}
-
-	/**
-	 * ForÃ§a o carregamento do template customizado caso a pÃ¡gina seja /novo-lead
+	 * Carrega o template do agradecimento na pagina /obrigado-contato
 	 */
 	public function override_conversion_template( $template ) {
-		if ( is_page( 'novo-lead' ) ) {
-			$custom_template = HUB_PATH . 'templates/page-clean-conversion.php';
-			if ( file_exists( $custom_template ) ) {
-				return $custom_template;
-			}
-		}
 		if ( is_page( 'obrigado-contato' ) ) {
 			$custom_template = HUB_PATH . 'templates/page-clean-thank-you.php';
 			if ( file_exists( $custom_template ) ) {

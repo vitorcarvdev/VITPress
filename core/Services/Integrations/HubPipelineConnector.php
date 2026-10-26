@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Conector Oficial do VitPress (antigo Hub VitAgência) com o Pipeline Central VCSis
+ * Conector Oficial do VitPress com o Pipeline Central VCSis
  * 
  * Responsabilidades:
  * 1. Escutar a criação de novos leads no VitPress (hook `hub/lead_created`).

@@ -627,4 +627,46 @@
 	if (session.isOpen) {
 		openChat();
 	}
-})();
+
+	// --- Link cego: https://seusite.com.br/#atendente abre o atendente ---
+	// Funciona ao carregar a página, ao mudar a âncora e em cliques em links para a própria página (sem recarregar).
+	var LINK_HASH = '#atendente';
+
+	function isLinkHash(hash) {
+		return String(hash || '').toLowerCase() === LINK_HASH;
+	}
+
+	function openFromLink() {
+		if (chatWindow.classList.contains('hidden')) {
+			openChat();
+		}
+	}
+
+	if (isLinkHash(window.location.hash)) {
+		openFromLink();
+	}
+
+	window.addEventListener('hashchange', function () {
+		if (isLinkHash(window.location.hash)) {
+			openFromLink();
+		}
+	});
+
+	document.addEventListener('click', function (e) {
+		var link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+		if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+			return;
+		}
+		var target;
+		try {
+			target = new URL(link.getAttribute('href'), window.location.href);
+		} catch (err) {
+			return;
+		}
+		var samePage = target.origin === window.location.origin &&
+			target.pathname.replace(/\/+$/, '') === window.location.pathname.replace(/\/+$/, '');
+		if (samePage && isLinkHash(target.hash)) {
+			e.preventDefault();
+			openFromLink();
+		}
+	});})();

@@ -31,6 +31,7 @@ $export    = $read( 'core/Services/GoogleAdsOfflineExportService.php' );
 $tracker   = $read( 'core/Tracker.php' );
 $license   = $read( 'core/Admin.php' );
 $pipeline  = $read( 'modules/Pipeline/PipelineModule.php' );
+$atendente = $read( 'admin/views/atendente.php' );
 
 $check( str_contains( $form, "stage_source' => 'vitpress_form'" ) && str_contains( $form, 'get_stage_definitions()' ), 'formulário continua no estágio inicial do pipeline' );
 $check( str_contains( $collector, "stage_source' => 'vitpress_attendant'" ) && str_contains( $collector, 'get_stage_definitions()' ), 'atendente continua no estágio inicial do pipeline' );
@@ -55,7 +56,7 @@ $check( str_contains( $save, "isset( \$_POST['meta_ads'] )" ) && str_contains( $
 $check( str_contains( $license, 'LocalLicenseProvider' ) && str_contains( $license, 'isValid()' ), 'licença do Atendente permanece' );
 $tabs = $read( 'admin/views/vitagencia.php' );
 $geral = $read( 'admin/views/vitagencia-geral.php' );
-$tab_order = array( '>Marketing<', '>LGPD<', '>Backup<', '>E-mails<', '>Segurança do WP<', '>Diagnóstico<', '>Tracker<' );
+$tab_order = array( '>Marketing<', '>LGPD<', '>Amazon<', '>Segurança do WP<', '>Diagnóstico<', '>Tracker<' );
 $cursor = 0;
 $order_ok = true;
 foreach ( $tab_order as $label ) {
@@ -68,7 +69,7 @@ foreach ( $tab_order as $label ) {
 }
 $check( $order_ok && ! str_contains( $tabs, 'Licença & APIs' ) && ! str_contains( $tabs, 'Tráfego & Conversão' ), 'abas na ordem Marketing até Tracker' );
 $check( str_contains( $tabs, "'trafego' === \$active_tab" ) && str_contains( $geral, 'vitagencia-trafego.php' ), 'URL antiga de tráfego abre Marketing com o conteúdo anterior' );
-$check( str_contains( $geral, 'Status da Licença' ) && str_contains( $traffic, 'Formulário de Captação' ) && str_contains( $traffic, 'hub_save_vitagencia' ), 'licença e captação continuam nos mesmos formulários' );
+$check( str_contains( $geral, 'Status da Licença' ) && ! str_contains( $traffic, 'Redirecionamento do Atendente' ) && str_contains( $atendente, 'Redirecionamento do Atendente (WhatsApp)' ) && ! str_contains( $traffic, 'Formulário de Captação' ) && str_contains( $traffic, 'hub_save_vitagencia' ), 'licença continua na Marketing; o redirecionamento do Atendente (WhatsApp) foi para a página do Atendente' );
 $check( ! str_contains( $events, 'graph.facebook.com' ) && ! str_contains( $events, 'googletagmanager' ), 'FORM_SUBMIT não chama Google nem Meta' );
 
 if ( $fail > 0 ) {

@@ -1,7 +1,7 @@
 <?php
 /**
  * admin/views/vitagencia-backup.php
- * Aba de Backup e Migração na Área VitAgência.
+ * Página Backup e Restauração (menu principal do VitPress): backup, restauração e backups legados.
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -23,14 +23,6 @@ $legacy_backups = $backup_service->get_legacy_backups();
 	
 	<?php if ( isset( $_GET['message'] ) && 'legacy_deleted' === $_GET['message'] ) : ?>
 		<div class="notice notice-success inline"><p>Backups antigos removidos com sucesso.</p></div>
-	<?php endif; ?>
-
-	<?php if ( isset( $_GET['message'] ) && 's3_saved' === $_GET['message'] ) : ?>
-		<div class="notice notice-success inline"><p>Configurações do Amazon S3 salvas com sucesso.</p></div>
-	<?php endif; ?>
-
-	<?php if ( isset( $_GET['message'] ) && 's3_success' === $_GET['message'] ) : ?>
-		<div class="notice notice-success inline"><p>Teste de Conexão S3 realizado com sucesso! As credenciais estão corretas.</p></div>
 	<?php endif; ?>
 
 	<?php if ( ! empty( $_GET['error'] ) ) : ?>
@@ -89,29 +81,26 @@ $legacy_backups = $backup_service->get_legacy_backups();
 
 	<hr style="margin: 30px 0;">
 
-	<h3>BACKUP COMPLETO</h3>
-	<p>Gere uma cópia completa do site para migração ou segurança.<br>O arquivo <code>.zip</code> é temporário e removido automaticamente após o download.</p>
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" target="_blank" onsubmit="setTimeout(function(){window.location.reload();}, 3000);">
-		<input type="hidden" name="action" value="hub_run_backup_full">
-		<?php wp_nonce_field( 'hub_run_backup', 'hub_nonce' ); ?>
-		<button type="submit" class="button button-primary">Gerar e Baixar Backup Completo (.zip)</button>
-	</form>
-
-	<hr style="margin: 30px 0;">
-
-	<h3>BANCO DE DADOS</h3>
-	<p>Gere manualmente uma cópia do banco de dados.<br>O arquivo não permanece armazenado no servidor.</p>
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" target="_blank" onsubmit="setTimeout(function(){window.location.reload();}, 3000);">
-		<input type="hidden" name="action" value="hub_run_backup_db">
-		<?php wp_nonce_field( 'hub_run_backup', 'hub_nonce' ); ?>
-		<button type="submit" class="button button-primary">Gerar e Baixar Banco de Dados</button>
-	</form>
+	<h3>BACKUP</h3>
+	<p>O backup completo gera uma cópia do site (arquivos e banco de dados) para migração ou segurança. O backup do banco de dados gera apenas a cópia do banco. Os arquivos não permanecem armazenados no servidor.</p>
+	<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" target="_blank" onsubmit="setTimeout(function(){window.location.reload();}, 3000);">
+			<input type="hidden" name="action" value="hub_run_backup_full">
+			<?php wp_nonce_field( 'hub_run_backup', 'hub_nonce' ); ?>
+			<button type="submit" class="button button-primary">Backup Completo</button>
+		</form>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" target="_blank" onsubmit="setTimeout(function(){window.location.reload();}, 3000);">
+			<input type="hidden" name="action" value="hub_run_backup_db">
+			<?php wp_nonce_field( 'hub_run_backup', 'hub_nonce' ); ?>
+			<button type="submit" class="button button-primary">Backup do Banco de Dados</button>
+		</form>
+	</div>
 
 	<hr style="margin: 30px 0;">
 
 	<h3>RESTAURAR / MIGRAR SITE</h3>
 	<p>Importe um <code>.zip</code> completo criado pelo VitPress (arquivos e banco de dados).</p>
-	<p class="description">Backups antigos do Hub VitAgência (nome anterior do VitPress) que contêm só a pasta <code>wp-content</code>, sem banco de dados, podem restaurar apenas os arquivos: o banco de dados atual é mantido e você confirma antes de começar. Outros formatos antigos não são compatíveis.</p>
+	<p class="description">Backups antigos do VitPress, de versões anteriores, que contêm só a pasta <code>wp-content</code>, sem banco de dados, podem restaurar apenas os arquivos: o banco de dados atual é mantido e você confirma antes de começar. Outros formatos antigos não são compatíveis.</p>
 	<form id="hub-chunked-upload-form" enctype="multipart/form-data" data-chunk-size="<?php echo esc_attr( \Hub\Core\Services\BackupService::chunk_size() ); ?>">
 		<?php wp_nonce_field( 'hub_upload_backup', 'hub_nonce_upload' ); ?>
 		<input type="file" id="hubbackup_file" accept=".zip" required style="margin-bottom: 10px; display: block;">
@@ -191,106 +180,6 @@ $legacy_backups = $backup_service->get_legacy_backups();
 	
 	</div>
 
-<?php 
-$s3 = $settings['s3'] ?? []; 
-$s3_enabled = ! empty( $s3['enabled'] );
-$s3_access  = $s3['access_key'] ?? '';
-$s3_secret  = $s3['secret_key'] ?? '';
-$s3_region  = $s3['region'] ?? 'sa-east-1';
-$s3_bucket  = $s3['bucket'] ?? '';
-$retention_db = $s3['retention_db'] ?? 30;
-$retention_full = $s3['retention_full'] ?? 4;
-
-$display_secret = !empty($s3_secret) ? str_repeat('*', 36) . substr($s3_secret, -4) : '';
-?>
-<div class="card" style="max-width: 800px; padding: 20px; margin-top: 20px;">
-	<h2>Integração Amazon S3 (Backups Automáticos)</h2>
-	<p class="description">
-		Configure o envio automático de backups para o seu bucket no Amazon S3. Quando ativado, o VitPress fará o backup do banco de dados <strong>diariamente</strong> e o backup completo <strong>semanalmente</strong>.
-	</p>
-
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-		<input type="hidden" name="action" value="hub_save_s3_backup">
-		<?php wp_nonce_field( 'hub_s3_backup_nonce', 'hub_nonce' ); ?>
-
-		<table class="form-table">
-			<tr>
-				<th scope="row">Status</th>
-				<td>
-					<label>
-						<input type="checkbox" name="s3[enabled]" value="1" <?php checked( $s3_enabled ); ?>>
-						Habilitar rotinas de backup automático para o S3
-					</label>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_access">Chave de Acesso (Access Key)</label></th>
-				<td>
-					<input name="s3[access_key]" type="text" id="s3_access" value="<?php echo esc_attr( $s3_access ); ?>" class="regular-text">
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_secret">Chave Secreta (Secret Key)</label></th>
-				<td>
-					<input name="s3[secret_key]" type="password" id="s3_secret" value="<?php echo esc_attr( $display_secret ); ?>" class="regular-text" placeholder="Deixe em branco para manter a atual">
-					<p class="description">A chave secreta não é exibida integralmente por motivos de segurança.</p>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_region">Região</label></th>
-				<td>
-					<input name="s3[region]" type="text" id="s3_region" value="<?php echo esc_attr( $s3_region ); ?>" class="regular-text">
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_bucket">Bucket</label></th>
-				<td>
-					<input name="s3[bucket]" type="text" id="s3_bucket" value="<?php echo esc_attr( $s3_bucket ); ?>" class="regular-text" placeholder="ex: bkps-sites-vcsis">
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_retention_db">Retenção de BD</label></th>
-				<td>
-					Manter os últimos <input name="s3[retention_db]" type="number" id="s3_retention_db" value="<?php echo esc_attr( $retention_db ); ?>" class="small-text"> backups de Banco de Dados armazenados na Amazon S3.
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="s3_retention_full">Retenção Completo</label></th>
-				<td>
-					Manter os últimos <input name="s3[retention_full]" type="number" id="s3_retention_full" value="<?php echo esc_attr( $retention_full ); ?>" class="small-text"> backups Completos armazenados na Amazon S3.
-				</td>
-			</tr>
-		</table>
-
-		<p class="submit" style="display: flex; gap: 15px; align-items: center; max-width: 800px; flex-wrap: wrap;">
-			<button type="submit" name="submit_action" value="save" class="button button-primary">Salvar Configurações S3</button>
-			<span style="border-left: 1px solid #ccc; height: 30px;"></span>
-			<button type="submit" name="submit_action" value="test" class="button button-secondary">Testar Conexão S3</button>
-		</p>
-	</form>
-
-	<hr>
-	<h3>Diagnóstico do Worker</h3>
-	<?php
-	$job_state = get_option( 'hub_backup_job_state', false );
-	if ( $job_state ) :
-		$status = $job_state['status'] ?? 'N/A';
-		$color = 'black';
-		if ($status === 'done') $color = 'green';
-		if ($status === 'error') $color = 'red';
-		if (in_array($status, ['uploading', 'pending_generation', 'init_upload', 'completing'])) $color = 'orange';
-	?>
-		<p><strong>Último Job:</strong> <?php echo esc_html($job_state['type'] ?? ''); ?></p>
-		<p><strong>Status:</strong> <span style="color: <?php echo $color; ?>; font-weight: bold;"><?php echo esc_html($status); ?></span></p>
-		<p><strong>Atualizado em:</strong> <?php echo esc_html($job_state['updated_at'] ?? $job_state['start'] ?? 'N/A'); ?></p>
-		<?php if ( ! empty($job_state['error']) ) : ?>
-			<p style="color:red;"><strong>Último Erro:</strong> <?php echo esc_html($job_state['error']); ?></p>
-		<?php endif; ?>
-	<?php else : ?>
-		<p>Nenhum job de backup registrado ainda.</p>
-	<?php endif; ?>
-</div>
-
 <?php
 $restore_status     = $backup_service->restore_status();
 $restore_info       = ( ! $restore_status && isset( $_GET['restore_file'] ) ) ? $backup_service->inspect_restore_file( sanitize_text_field( wp_unslash( $_GET['restore_file'] ) ) ) : null;
@@ -347,7 +236,7 @@ $restore_phases     = array(
 <?php elseif ( $restore_info ) : ?>
 <div class="card" id="hub-restore-panel" style="max-width: 800px; padding: 20px; margin-top: 20px; border-left: 4px solid #2271b1;">
 	<h2>Backup pronto para restauração</h2>
-	<p><?php echo $restore_files_only ? 'Backup antigo do Hub VitAgência (nome anterior do VitPress): somente arquivos de wp-content serão restaurados. O banco de dados atual será mantido.' : 'Backup completo do VitPress (arquivos e banco de dados). Nada será alterado até você aplicar a restauração.'; ?></p>
+	<p><?php echo $restore_files_only ? 'Backup antigo do VitPress (versão anterior): somente arquivos de wp-content serão restaurados. O banco de dados atual será mantido.' : 'Backup completo do VitPress (arquivos e banco de dados). Nada será alterado até você aplicar a restauração.'; ?></p>
 	<p><button type="button" class="button button-primary hub-restore-action" data-action="start">Iniciar restauração</button></p>
 	<p id="hub-restore-msg" style="font-weight: bold;"></p>
 </div>
@@ -359,9 +248,9 @@ jQuery(document).ready(function($) {
 	var nonce = '<?php echo esc_js( wp_create_nonce( 'hub_restore_chunk' ) ); ?>';
 	var file = '<?php echo esc_js( $restore_info ? basename( sanitize_text_field( wp_unslash( $_GET['restore_file'] ) ) ) : '' ); ?>';
 	var filesOnly = <?php echo $restore_files_only ? 'true' : 'false'; ?>;
-	var panelUrl = '<?php echo esc_js( admin_url( 'admin.php?page=hub-vitagencia&tab=backup' ) ); ?>';
+	var panelUrl = '<?php echo esc_js( admin_url( 'admin.php?page=hub-backup' ) ); ?>';
 	var confirms = {
-		start: filesOnly ? 'Este é um backup antigo do Hub VitAgência (nome anterior do VitPress) sem banco de dados.\n\nSerão restaurados SOMENTE os arquivos de wp-content (plugins, temas, uploads). O banco de dados atual NÃO será alterado.\n\nDeseja continuar?' : '',
+		start: filesOnly ? 'Este é um backup antigo do VitPress (versão anterior) sem banco de dados.\n\nSerão restaurados SOMENTE os arquivos de wp-content (plugins, temas, uploads). O banco de dados atual NÃO será alterado.\n\nDeseja continuar?' : '',
 		'switch': 'Aplicar a restauração agora?\n\nArquivos e banco de dados serão trocados pelos do backup. As cópias antigas ficam guardadas até você confirmar ou reverter.',
 		revert: 'Reverter para o site anterior?',
 		discard: 'Descartar esta restauração? O site atual não será alterado.',
@@ -418,8 +307,12 @@ jQuery(document).ready(function($) {
 			var data = response.data || {};
 			if (data.phase === 'switched' && !data.closed) {
 				$msg.css('color', '#1d2327').empty()
-					.append($('<span>').text('Restauração aplicada. Os usuários agora são os do backup. Para confirmar ou reverter, use o link de recuperação acima ou '))
-					.append($('<a>').attr('href', data.login_url).text('entre no site restaurado'));
+					.append($('<span>').text('Restauração aplicada. Os usuários agora são os do backup. Para confirmar ou reverter, use o link de recuperação acima. Para ver o site restaurado, '))
+					.append($('<a>').attr('href', data.site_url).text('abra o site restaurado'));
+				return;
+			}
+			if (data.closed && action === 'confirm' && data.site_url) {
+				window.location.href = data.site_url;
 				return;
 			}
 			window.location.href = panelUrl + (data.closed ? '&message=restored' : '');
