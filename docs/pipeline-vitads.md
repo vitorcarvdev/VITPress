@@ -25,3 +25,6 @@ Os Indicadores continuam lendo `stage` de `hub_leads`, que o ciclo mantém atual
 
 ## O que continua indisponível
 `first_contact_at`, `attempts_count` e `hub_lead_contact_attempts` só são preenchidos por `ContactAttemptService::record_attempt()`, que **nunca é chamado** (desde a versão 1.9.0), e `hub_history` não é gravada: não existe registro de quando a clínica respondeu ao lead. Por isso o portal mostra "Não disponível" para o tempo até o primeiro contato do atendimento.
+
+## Leads antigos
+A importação dos leads anteriores à integração (com dry-run, sem duplicar e sem conversões) está em docs/backfill-leads-vitads.md (comando manual wp vitpress backfill-leads).

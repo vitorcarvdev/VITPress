@@ -279,7 +279,7 @@ class PipelineContactSync {
 	 * @param object $lead
 	 * @return array<string, string>
 	 */
-	private static function contact_profile( $lead ) {
+	public static function contact_profile( $lead ) {
 		$profile = array();
 		$name    = trim( (string) ( $lead->name ?? '' ) );
 		if ( '' !== $name ) {

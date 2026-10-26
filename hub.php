@@ -3,7 +3,7 @@
  * Plugin Name: VitPress
  * Plugin URI: https://vcsis.com.br/hub
  * Description: VitPress — central de gestão com atendente virtual, Pipeline, conversões, indicadores, automações, suporte e ferramentas.
- * Version: 1.9.3
+ * Version: 1.9.4
  * Author: VitAgência + VCSIS
  * Author URI: https://vitagencia.com.br
  * Text Domain: hub
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // 1. Definição das Constantes Principais
-define( 'HUB_VERSION', '1.9.3' );
+define( 'HUB_VERSION', '1.9.4' );
 define( 'HUB_FILE', __FILE__ );
 define( 'HUB_PATH', plugin_dir_path( __FILE__ ) );
 define( 'HUB_URL', plugin_dir_url( __FILE__ ) );
@@ -103,6 +103,11 @@ function hub_init() {
 
 	// Sincronização agendada das etapas VitAds -> VitPress (não depende de abrir o pipeline antigo)
 	\Hub\Core\Services\Integrations\PipelinePullWorker::get_instance()->init();
+
+	// Importação dos leads antigos para o VitAds (somente manual: wp vitpress backfill-leads).
+	if ( defined( 'WP_CLI' ) && WP_CLI ) {
+		\WP_CLI::add_command( 'vitpress backfill-leads', '\Hub\Core\Cli\LeadBackfillCommand' );
+	}
 
 	// Fila de Exportação Offline (CSV) para o Google Ads
 	$offline_queue = new \Hub\Core\Services\GoogleAdsOfflineQueueService();
